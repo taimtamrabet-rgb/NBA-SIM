@@ -76,12 +76,12 @@
   .muted { color: var(--muted); }
 
   /* ---------- App shell ---------- */
-  #app { display: grid; grid-template-columns: 208px 1fr; grid-template-rows: 68px 1fr; min-height: 100vh; }
+  #app { display: grid; grid-template-columns: 208px 1fr; grid-template-rows: auto 1fr; min-height: 100vh; }
   #app.is-hidden { display: none; }
 
   .topbar {
-    grid-column: 1 / -1; display: flex; align-items: center; gap: 18px;
-    padding: 0 22px; border-bottom: 1px solid var(--line); background: var(--panel);
+    grid-column: 1 / -1; display: flex; align-items: center; gap: 14px 18px; flex-wrap: wrap;
+    padding: 13px 22px; border-bottom: 1px solid var(--line); background: var(--panel);
     position: sticky; top: 0; z-index: 20;
   }
   .brand { display: flex; align-items: center; gap: 10px; margin-right: 6px; }
@@ -234,14 +234,66 @@
 
   .empty-state { color: var(--muted); font-size: 13.5px; padding: 20px 6px; text-align: center; }
 
-  @media (max-width: 860px) {
-    #app { grid-template-columns: 1fr; grid-template-rows: auto auto 1fr; }
+  /* This app is a wide, data-dense scoreboard — it's designed for landscape.
+     Below 700px of width (smaller than any phone in landscape) fall back to
+     a stacked single-column layout as a safety net. */
+  @media (max-width: 700px) {
+    #app { grid-template-columns: 1fr; }
     .nav { flex-direction: row; overflow-x: auto; border-right: none; border-bottom: 1px solid var(--line); padding: 8px 10px; }
     .grid-2, .grid-3 { grid-template-columns: 1fr; }
     .team-grid { grid-template-columns: repeat(3, 1fr); }
     .bracket { grid-template-columns: repeat(5, minmax(130px, 1fr)); }
   }
+
+  /* Short landscape viewports (phones): reclaim vertical space. Row heights stay
+     `auto` (set on #app above) so wrapped topbar content is never clipped. */
+  @media (max-height: 500px) and (orientation: landscape) {
+    .topbar { padding: 8px 16px; gap: 8px 14px; }
+    .brand-sub { display: none; }
+    .main { padding: 14px 18px 40px; }
+    .nav { padding: 6px 8px; gap: 1px; }
+    .nav button { padding: 7px 10px; }
+    .panel { padding: 12px 16px; }
+  }
+
+  /* On a phone held in portrait, ask for a rotate rather than cramming this
+     much scoreboard data into a narrow column. */
+  .rotate-prompt {
+    display: none;
+    position: fixed; inset: 0; z-index: 9999;
+    background: var(--paper); color: var(--ink);
+    flex-direction: column; align-items: center; justify-content: center; gap: 20px;
+    text-align: center; padding: 32px;
+  }
+  .rotate-phone {
+    width: 44px; height: 74px; border: 3px solid var(--ink); border-radius: 9px;
+    position: relative; flex: none;
+    animation: rotate-hint 1.8s ease-in-out infinite;
+  }
+  .rotate-phone::after {
+    content: ""; position: absolute; left: 50%; bottom: 7px; width: 8px; height: 8px;
+    margin-left: -4px; border-radius: 999px; background: var(--ink);
+  }
+  @keyframes rotate-hint {
+    0%, 20% { transform: rotate(0deg); }
+    55%, 100% { transform: rotate(-90deg); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .rotate-phone { animation: none; transform: rotate(-90deg); }
+  }
+  .rotate-prompt .rp-title { font: 800 21px/1.2 var(--font-display); text-transform: uppercase; letter-spacing: 0.02em; }
+  .rotate-prompt .rp-copy { color: var(--muted); max-width: 34ch; font-size: 14px; }
+  @media (orientation: portrait) and (max-width: 900px) {
+    .rotate-prompt { display: flex; }
+    #startscreen, #app { display: none !important; }
+  }
 </style>
+
+<div class="rotate-prompt" id="rotatePrompt" role="status" aria-live="polite">
+  <div class="rotate-phone" aria-hidden="true"></div>
+  <div class="rp-title">Turn Your Device</div>
+  <div class="rp-copy">Full Court is built for landscape — scoreboards, brackets, and box scores need the room. Rotate to keep playing.</div>
+</div>
 
 <div class="startscreen" id="startscreen">
   <div class="start-card">
@@ -1066,9 +1118,16 @@ const TABS = [
   { id: "log", label: "Log" },
 ];
 
+function switchTab(id) {
+  S.tab = id;
+  window.scrollTo(0, 0);
+  renderAll();
+}
+
 function bootApp() {
   document.getElementById("startscreen").classList.add("is-hidden");
   document.getElementById("app").classList.remove("is-hidden");
+  window.scrollTo(0, 0);
   renderNav();
   renderMyTeamSelect();
   renderAll();
@@ -1077,7 +1136,7 @@ function bootApp() {
 function renderNav() {
   const nav = document.getElementById("navRail");
   nav.innerHTML = TABS.map((t) => `<button type="button" data-tab="${t.id}" role="tab" aria-selected="${S.tab === t.id}">${t.label}</button>`).join("");
-  nav.querySelectorAll("button").forEach((b) => b.addEventListener("click", () => { S.tab = b.dataset.tab; renderAll(); }));
+  nav.querySelectorAll("button").forEach((b) => b.addEventListener("click", () => switchTab(b.dataset.tab)));
 }
 
 function renderMyTeamSelect() {
@@ -1172,6 +1231,7 @@ function startPlayoffs() {
   S.history.push({ year: S.league.year, champion: result.champion.abbr });
   log(`${E.teamName(result.champion)} win the ${S.league.year} Championship, defeating ${E.teamName(result.finals.winner === result.finals.high ? S.league.teams[result.finals.low] : S.league.teams[result.finals.high])} ${result.finals.wins[result.finals.winner]}-${result.finals.wins[result.finals.winner === result.finals.high ? result.finals.low : result.finals.high]}.`, "TITLE");
   S.tab = "playoffs";
+  window.scrollTo(0, 0);
   save();
   renderAll();
 }
@@ -1181,6 +1241,7 @@ function startOffseason() {
   const picks = E.orderedPicks(S.league, S.league.year);
   S.draft = { picks, idx: 0, available: S.league.draftClass.slice(), results: [] };
   S.tab = "draft";
+  window.scrollTo(0, 0);
   save();
   draftAdvance();
 }
@@ -1238,6 +1299,7 @@ function finishDraftAndOffseason() {
   S.league.draftClass = E.generateDraftClass(S.league.year, 60);
   S.league.phase = "regular";
   S.tab = "standings";
+  window.scrollTo(0, 0);
   save();
   renderAll();
 }
