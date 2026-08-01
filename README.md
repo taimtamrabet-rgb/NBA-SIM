@@ -6,7 +6,7 @@ A complete NBA front-office sim that runs entirely in your browser. No build ste
 
 ## What it does
 
-- **30 procedurally-generated rosters** across real NBA cities/conferences/divisions, with ratings, ages, contracts, and development curves. Players are fictional.
+- **Real opening rosters**: all 30 teams start from actual current NBA players (name, position, age), seeded into the 2026-27 season with ratings assigned from a researched 1-10 caliber tier. Once the season starts the league is yours — trades, the draft, free agency, aging, and retirement all play out through the sim from there, so rosters drift from reality as fast as you (and the CPU) reshape them.
 - **An 82-game regular season**, scheduled with a round-robin ("circle method") algorithm that guarantees every team plays exactly 82 games, one game per day, fully balanced. Every game keeps a full box score you can pull up later.
 - **End-of-season awards**: MVP, Defensive Player of the Year, Sixth Man of the Year, and Rookie of the Year, each with four finalists computed from real season stats, role (starter vs. bench), and rookie status.
 - **A play-in tournament**: seeds 7-10 in each conference fight for the last two playoff spots (7-vs-8, 9-vs-10, and a final survive-and-advance game) before the bracket locks — exactly like the real thing.
@@ -59,4 +59,4 @@ The simulation engine (player/team generation, scheduling, game sim, standings, 
 
 ## Known simplifications
 
-This is a game, not a broadcast-quality sim: box-score stats are distributed statistically rather than simulated possession-by-possession, there are no injuries, and the cap/apron rules are a simplified approximation of the real CBA (no trade salary-matching restrictions, no exception tracking). Team city/nickname data is factual and public; every player is procedurally generated and fictional.
+This is a game, not a broadcast-quality sim: box-score stats are distributed statistically rather than simulated possession-by-possession, there are no injuries, and the cap/apron rules are a simplified approximation of the real CBA (no trade salary-matching restrictions, no exception tracking). Team and player data (names, positions, ages) reflects real public information as of the 2026-27 season and every roster is a real-name, real-team starting point — but ratings are a researched approximation, not an official rating, and the moment you start playing the league belongs to the sim: every trade, draft pick, contract, and box score from that point on is simulated, not real. Future draft classes are procedurally generated, not real prospects.
