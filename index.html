@@ -1,0 +1,2501 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Baseline GM — Franchise Simulator</title>
+<meta name="description" content="Run an NBA front office: the amateur draft with a real lottery, a play-in tournament, season awards, free agency under the cap, and a CPU trade market that negotiates back." />
+</head>
+<body>
+<style>
+  :root {
+    --bg: #0a0e16; --panel: #121826; --panel-2: #171f30; --panel-3: #1c2438;
+    --line: rgba(255,255,255,0.09); --line-strong: rgba(255,255,255,0.16);
+    --ink: #edf1f7; --ink-rgb: 237,241,247; --muted: #8996ac;
+    --cyan: #3dd9f0; --cyan-rgb: 61,217,240;
+    --gold: #e8c468; --gold-rgb: 232,196,104;
+    --green: #4ade80; --green-rgb: 74,222,128;
+    --red: #ff6b6b; --red-rgb: 255,107,107;
+    --blue-btn: #2db4e8; --blue-btn-ink: #06202b;
+    --shadow: 0 1px 2px rgba(0,0,0,0.4), 0 10px 30px -14px rgba(0,0,0,0.7);
+    --radius-sm: 5px; --radius-md: 9px;
+    --font-display: "Arial Narrow", "Roboto Condensed", Arial, sans-serif;
+    --font-body: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-mono: ui-monospace, "Cascadia Code", "SF Mono", "Roboto Mono", Menlo, Consolas, monospace;
+  }
+  /* Baseline GM is a deliberately single-world dark "front office at night" app —
+     it does not adapt to the viewer's light/dark preference. */
+
+  *, *::before, *::after { box-sizing: border-box; }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
+  }
+  html, body { height: 100%; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-family: var(--font-body); font-size: 15px; line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+  h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; }
+  button, select, input { font-family: inherit; color: inherit; }
+  a { color: var(--cyan); }
+  :focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; border-radius: 2px; }
+  ::selection { background: rgba(var(--cyan-rgb), 0.35); }
+
+  .label { font-family: var(--font-display); text-transform: uppercase; letter-spacing: 0.07em; font-size: 11px; color: var(--muted); }
+  .num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+  .muted { color: var(--muted); }
+  .stars { color: var(--gold); letter-spacing: 1px; font-size: 12px; }
+  .stars .dim { color: rgba(var(--gold-rgb), 0.28); }
+
+  /* ---------- App shell ---------- */
+  #app { display: grid; grid-template-columns: 210px 1fr; grid-template-rows: auto 1fr; min-height: 100vh; }
+  #app.is-hidden { display: none; }
+
+  .topbar {
+    grid-column: 1 / -1; display: flex; align-items: center; gap: 14px 18px; flex-wrap: wrap;
+    padding: 13px 22px; border-bottom: 1px solid var(--line); background: var(--panel);
+    position: sticky; top: 0; z-index: 20; box-shadow: 0 1px 0 var(--cyan) inset;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; margin-right: 4px; }
+  .brand-mark {
+    width: 32px; height: 32px; border-radius: var(--radius-sm); background: var(--cyan); color: #06232a;
+    display: flex; align-items: center; justify-content: center; font: 800 13px/1 var(--font-display); letter-spacing: 0.01em;
+    flex: none;
+  }
+  .breadcrumb { display: flex; align-items: baseline; gap: 6px; font-family: var(--font-display); text-transform: uppercase; letter-spacing: 0.03em; font-size: 13px; flex-wrap: wrap; }
+  .breadcrumb .crumb { color: var(--muted); }
+  .breadcrumb .crumb.current { color: var(--ink); font-weight: 800; }
+  .breadcrumb .sep { color: var(--line-strong); }
+  .brand-title-crumb { color: var(--cyan); font-weight: 800; }
+
+  .phase-pill {
+    font: 700 10.5px/1 var(--font-display); text-transform: uppercase; letter-spacing: 0.06em;
+    padding: 5px 9px; border-radius: 999px; border: 1px solid var(--line-strong); white-space: nowrap;
+  }
+  .phase-pill[data-phase="regular"] { color: var(--green); border-color: rgba(var(--green-rgb),0.4); background: rgba(var(--green-rgb),0.1); }
+  .phase-pill[data-phase="postseason"] { color: var(--gold); border-color: rgba(var(--gold-rgb),0.4); background: rgba(var(--gold-rgb),0.12); }
+  .phase-pill[data-phase="offseason"] { color: var(--red); border-color: rgba(var(--red-rgb),0.4); background: rgba(var(--red-rgb),0.1); }
+
+  .topbar-actions { display: flex; align-items: center; gap: 8px; flex: 1; flex-wrap: wrap; }
+  .topbar-spacer { flex: 1; }
+  .chip-row { display: flex; align-items: center; gap: 8px; }
+  .team-chip, select.chip-select {
+    background: var(--panel-2); color: var(--ink); border: 1px solid var(--line-strong); border-radius: var(--radius-sm);
+    padding: 7px 10px; font: 700 12px var(--font-display); text-transform: uppercase; letter-spacing: 0.02em;
+  }
+
+  .btn {
+    font: 700 12px/1 var(--font-display); text-transform: uppercase; letter-spacing: 0.04em;
+    padding: 9px 14px; border-radius: var(--radius-sm); border: 1px solid var(--line-strong);
+    background: var(--panel-2); color: var(--ink); cursor: pointer; white-space: nowrap;
+    transition: border-color .12s ease, transform .06s ease;
+  }
+  .btn:hover { border-color: var(--cyan); }
+  .btn:active { transform: translateY(1px); }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn--primary { background: var(--blue-btn); color: var(--blue-btn-ink); border-color: var(--blue-btn); }
+  .btn--primary:hover { filter: brightness(1.08); }
+  .btn--gold { background: var(--gold); color: #241a02; border-color: var(--gold); }
+  .btn--ghost { background: transparent; }
+  .btn--sm { padding: 6px 10px; font-size: 11px; }
+  .btn--danger { color: var(--red); }
+
+  /* ---------- Nav rail ---------- */
+  .nav { display: flex; flex-direction: column; gap: 2px; padding: 16px 10px; border-right: 1px solid var(--line); background: var(--bg); overflow-y: auto; }
+  .nav button {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px; text-align: left;
+    padding: 10px 11px; border-radius: var(--radius-sm); border: none; background: transparent; cursor: pointer;
+    font: 700 12.5px/1 var(--font-display); text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted);
+  }
+  .nav button:hover { color: var(--ink); background: var(--line); }
+  .nav button[aria-selected="true"] { color: var(--ink); background: var(--panel-2); box-shadow: inset 3px 0 0 var(--cyan); }
+  .nav .tab-badge { font: 700 10px/1 var(--font-mono); background: rgba(var(--gold-rgb),0.2); color: var(--gold); border-radius: 999px; padding: 2px 6px; }
+
+  /* ---------- Main ---------- */
+  .main { padding: 22px 26px 70px; overflow-y: auto; min-width: 0; }
+  .view { display: none; flex-direction: column; gap: 18px; }
+  .view.is-active { display: flex; }
+
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius-md); padding: 18px 20px; box-shadow: var(--shadow); border-top: 2px solid var(--cyan); }
+  .panel.panel--gold { border-top-color: var(--gold); }
+  .panel.panel--flat { border-top-color: var(--line); }
+  .panel-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
+  .panel-title { font: 800 16px/1.2 var(--font-display); text-transform: uppercase; letter-spacing: 0.03em; }
+  .panel-sub { font-size: 12.5px; color: var(--muted); }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+
+  .stat-card { background: var(--panel-2); border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 12px 14px; border-left: 3px solid var(--cyan); }
+  .stat-card.gold { border-left-color: var(--gold); }
+  .stat-card .v { font: 800 19px/1.2 var(--font-mono); }
+  .stat-card .k { font-size: 11px; color: var(--muted); margin-top: 4px; }
+
+  .table-wrap { overflow-x: auto; }
+  table.stat-table { width: 100%; border-collapse: collapse; font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 13px; }
+  table.stat-table th {
+    text-align: left; font-family: var(--font-display); text-transform: uppercase; letter-spacing: 0.05em;
+    font-size: 10.5px; color: var(--muted); border-bottom: 1px solid var(--line); padding: 7px 10px; white-space: nowrap;
+    position: sticky; top: 0; background: var(--panel);
+  }
+  table.stat-table td { padding: 6px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  table.stat-table tbody tr:hover td { background: var(--panel-2); cursor: default; }
+  table.stat-table tr.clickable:hover td { background: rgba(var(--cyan-rgb),0.08); cursor: pointer; }
+  table.stat-table td.name-cell, table.stat-table th.name-cell { font-family: var(--font-body); white-space: normal; }
+  table.stat-table tr.playoff-cut td { border-bottom: 2px solid var(--gold); }
+  table.stat-table tr.is-me td { background: rgba(var(--cyan-rgb), 0.09); }
+
+  .pill { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 999px; font: 700 10.5px/1.7 var(--font-display); letter-spacing: 0.03em; text-transform: uppercase; }
+  .pill--win { background: rgba(var(--green-rgb),0.16); color: var(--green); }
+  .pill--loss { background: rgba(var(--red-rgb),0.16); color: var(--red); }
+  .pill--seed { background: rgba(var(--gold-rgb),0.16); color: var(--gold); font-family: var(--font-mono); }
+  .pill--pos { background: var(--panel-2); color: var(--muted); font-family: var(--font-mono); border: 1px solid var(--line); }
+  .pill--move-up { color: var(--green); } .pill--move-down { color: var(--red); }
+
+  .meter { height: 10px; border-radius: 999px; background: var(--panel-2); overflow: hidden; position: relative; border: 1px solid var(--line); }
+  .meter > span { display: block; height: 100%; background: linear-gradient(90deg, var(--cyan), var(--gold)); }
+  .meter-ticks { position: relative; height: 15px; margin-top: 4px; font-size: 10px; color: var(--muted); font-family: var(--font-mono); }
+  .meter-ticks span { position: absolute; top: 0; white-space: nowrap; transform: translateX(-50%); }
+  .meter-ticks span:first-child { transform: none; }
+
+  .ticker { display: flex; gap: 10px; overflow-x: auto; padding: 2px 2px 8px; }
+  .score-card { min-width: 168px; border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 8px 10px; font-family: var(--font-mono); font-size: 12.5px; flex: none; background: var(--panel-2); cursor: pointer; }
+  .score-card:hover { border-color: var(--cyan); }
+  .score-card .row { display: flex; justify-content: space-between; padding: 2px 0; }
+  .score-card .row.win { color: var(--ink); font-weight: 700; }
+  .score-card .row.lose { color: var(--muted); }
+  .score-card .day { font-family: var(--font-display); text-transform: uppercase; letter-spacing: 0.05em; font-size: 9.5px; color: var(--muted); margin-bottom: 4px; }
+
+  /* ---------- Start screen ---------- */
+  .startscreen { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 30px 18px; background: radial-gradient(ellipse at top, #101a2c 0%, var(--bg) 60%); }
+  .startscreen.is-hidden { display: none; }
+  .start-card { max-width: 780px; width: 100%; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius-md); box-shadow: var(--shadow); padding: 30px 32px; border-top: 3px solid var(--cyan); }
+  .start-title { font: 800 32px/1.1 var(--font-display); text-transform: uppercase; letter-spacing: 0.01em; margin-bottom: 6px; color: var(--ink); }
+  .start-title span { color: var(--cyan); }
+  .start-copy { color: var(--muted); max-width: 64ch; margin-bottom: 20px; font-size: 14px; }
+  .conf-group { margin-bottom: 14px; }
+  .conf-label { margin-bottom: 8px; }
+  .team-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
+  .team-btn {
+    border: 1px solid var(--line-strong); background: var(--panel-2); border-radius: var(--radius-sm); padding: 8px 6px; color: var(--ink);
+    cursor: pointer; text-align: center; font: 700 11px/1.3 var(--font-display); letter-spacing: 0.02em;
+  }
+  .team-btn:hover { border-color: var(--cyan); }
+  .team-btn[aria-pressed="true"] { background: var(--cyan); color: #06232a; border-color: var(--cyan); }
+  .start-actions { display: flex; align-items: center; gap: 10px; margin-top: 20px; flex-wrap: wrap; }
+
+  /* ---------- Log ---------- */
+  .log-list { display: flex; flex-direction: column-reverse; gap: 0; max-height: 70vh; overflow-y: auto; }
+  .log-row { display: flex; gap: 12px; padding: 7px 2px; border-bottom: 1px solid var(--line); font-size: 13px; }
+  .log-tag { font-family: var(--font-mono); font-size: 10.5px; color: var(--muted); flex: none; width: 90px; padding-top: 1px; }
+
+  /* ---------- Bracket / Play-in ---------- */
+  .bracket { display: grid; grid-template-columns: repeat(5, minmax(150px, 1fr)); gap: 12px; overflow-x: auto; }
+  .bracket-col { display: flex; flex-direction: column; justify-content: space-around; gap: 12px; }
+  .bracket-col .col-label { text-align: center; margin-bottom: 4px; }
+  .series-card { border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 7px 9px; background: var(--panel-2); font-size: 12px; }
+  /* .srow is reused outside series-card too (play-in games, locked seeds),
+     so its base layout must not be scoped to a .series-card ancestor. */
+  .srow { display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 3px 0; }
+  .srow.winner { font-weight: 700; border-left: 2px solid var(--gold); padding-left: 6px; margin-left: -2px; }
+  .srow.loser { color: var(--muted); }
+  .series-card .score { font-family: var(--font-mono); }
+  .series-card .tbd { color: var(--muted); font-style: italic; text-align: center; padding: 10px 0; }
+  .champion-banner { display: flex; align-items: center; gap: 14px; padding: 16px 18px; border-radius: var(--radius-md); background: rgba(var(--gold-rgb), 0.12); border: 1px solid rgba(var(--gold-rgb),0.4); }
+  .champion-banner .cb-title { font: 800 22px/1.1 var(--font-display); text-transform: uppercase; color: var(--gold); }
+
+  .playin-flow { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; align-items: center; }
+  .playin-game { border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 10px 12px; background: var(--panel-2); }
+  .playin-game .pg-label { font: 700 10px var(--font-display); text-transform: uppercase; color: var(--muted); letter-spacing: .05em; margin-bottom: 6px; }
+  .playin-arrow { text-align: center; color: var(--muted); font-family: var(--font-mono); }
+  .locked-seed { border: 1px solid rgba(var(--gold-rgb),0.4); background: rgba(var(--gold-rgb),0.08); border-radius: var(--radius-sm); padding: 10px 12px; }
+
+  /* ---------- Awards ---------- */
+  .award-col { border: 1px solid var(--line); border-radius: var(--radius-sm); overflow: hidden; }
+  .award-head { background: var(--panel-2); padding: 10px 12px; border-bottom: 2px solid var(--gold); }
+  .award-head .a-label { font-size: 10px; color: var(--muted); }
+  .award-head .a-name { font: 800 15px var(--font-display); text-transform: uppercase; color: var(--gold); }
+  .award-row { padding: 9px 12px; border-bottom: 1px solid var(--line); font-size: 12.5px; }
+  .award-row.winner { background: rgba(var(--gold-rgb),0.1); }
+  .award-row .ar-name { font-weight: 700; display: flex; align-items: center; gap: 6px; }
+  .award-row .ar-meta { color: var(--muted); font-size: 11px; }
+  .award-row .ar-line { font-family: var(--font-mono); color: var(--muted); font-size: 11px; margin-top: 2px; }
+
+  /* ---------- Trade builder ---------- */
+  .asset-list { display: flex; flex-direction: column; gap: 4px; max-height: 360px; overflow-y: auto; padding-right: 4px; }
+  .asset-row { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: var(--radius-sm); border: 1px solid var(--line); background: var(--panel-2); font-size: 12.5px; cursor: pointer; }
+  .asset-row:hover { border-color: var(--cyan); }
+  .asset-row.checked { background: rgba(var(--cyan-rgb),0.12); border-color: var(--cyan); }
+  .asset-row input { accent-color: var(--cyan); }
+  .asset-name { flex: 1; }
+  .value-readout { display: flex; align-items: center; gap: 10px; font-family: var(--font-mono); font-size: 12.5px; flex-wrap: wrap; }
+  .verdict { font-weight: 700; }
+  .verdict.ok { color: var(--green); }
+  .verdict.bad { color: var(--red); }
+  .subtabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin-bottom: 14px; }
+  .subtabs button { background: none; border: none; color: var(--muted); font: 700 12px var(--font-display); text-transform: uppercase; letter-spacing: .04em; padding: 9px 4px; margin-right: 18px; cursor: pointer; border-bottom: 2px solid transparent; }
+  .subtabs button[aria-selected="true"] { color: var(--cyan); border-bottom-color: var(--cyan); }
+
+  .offer-card { border: 1px solid var(--line); border-radius: var(--radius-md); padding: 14px 16px; background: var(--panel-2); margin-bottom: 12px; }
+  .offer-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+  .offer-head .oh-team { font: 800 14px var(--font-display); text-transform: uppercase; }
+  .offer-assets { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+  .offer-chip { border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 6px 10px; font-size: 12px; background: var(--panel-3); }
+
+  .empty-state { color: var(--muted); font-size: 13.5px; padding: 20px 6px; text-align: center; }
+
+  /* ---------- Free agency ---------- */
+  .fa-row { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--panel-2); margin-bottom: 8px; flex-wrap: wrap; }
+  .fa-row .fa-name { font-weight: 700; min-width: 160px; }
+  .fa-row .fa-meta { color: var(--muted); font-size: 12px; }
+  .fa-willing { font-family: var(--font-mono); font-size: 11px; }
+
+  /* ---------- Modals (trade alert / box score) ---------- */
+  .modal-backdrop { position: fixed; inset: 0; background: rgba(4,6,10,0.72); z-index: 500; display: none; align-items: center; justify-content: center; padding: 24px; }
+  .modal-backdrop.is-open { display: flex; }
+  .modal-card { max-width: 560px; width: 100%; max-height: 85vh; overflow-y: auto; background: var(--panel); border: 1px solid var(--line-strong); border-radius: var(--radius-md); box-shadow: var(--shadow); }
+  .trade-alert-card { border-top: 3px solid var(--green); padding: 26px 28px; }
+  .ta-eyebrow { font: 700 11px var(--font-display); text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin-bottom: 6px; }
+  .ta-title { font: 800 30px var(--font-display); text-transform: uppercase; color: var(--green); margin-bottom: 18px; }
+  .ta-teams { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 20px; }
+  .ta-team-head { background: rgba(var(--gold-rgb),0.16); color: var(--gold); font: 700 11px var(--font-display); text-transform: uppercase; letter-spacing: .04em; padding: 7px 10px; border-radius: var(--radius-sm); margin-bottom: 8px; }
+  .ta-asset { font-size: 13px; font-weight: 700; padding: 4px 2px; }
+  .ta-actions { display: flex; gap: 10px; align-items: center; }
+  .box-modal { padding: 22px 24px; border-top: 3px solid var(--cyan); }
+  .box-teams { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 14px; }
+
+  @media (max-width: 700px) {
+    #app { grid-template-columns: 1fr; }
+    .nav { flex-direction: row; overflow-x: auto; border-right: none; border-bottom: 1px solid var(--line); padding: 8px 10px; }
+    .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
+    .team-grid { grid-template-columns: repeat(3, 1fr); }
+    .bracket { grid-template-columns: repeat(5, minmax(130px, 1fr)); }
+    .playin-flow { grid-template-columns: 1fr; }
+    .ta-teams, .box-teams { grid-template-columns: 1fr; }
+  }
+  @media (max-height: 500px) and (orientation: landscape) {
+    .topbar { padding: 8px 16px; gap: 8px 14px; }
+    .main { padding: 14px 18px 40px; }
+    .nav { padding: 6px 8px; gap: 1px; }
+    .nav button { padding: 7px 10px; }
+    .panel { padding: 12px 16px; }
+  }
+
+  .rotate-prompt { display: none; position: fixed; inset: 0; z-index: 9999; background: var(--bg); color: var(--ink); flex-direction: column; align-items: center; justify-content: center; gap: 20px; text-align: center; padding: 32px; }
+  .rotate-phone { width: 44px; height: 74px; border: 3px solid var(--cyan); border-radius: 9px; position: relative; flex: none; animation: rotate-hint 1.8s ease-in-out infinite; }
+  .rotate-phone::after { content: ""; position: absolute; left: 50%; bottom: 7px; width: 8px; height: 8px; margin-left: -4px; border-radius: 999px; background: var(--cyan); }
+  @keyframes rotate-hint { 0%, 20% { transform: rotate(0deg); } 55%, 100% { transform: rotate(-90deg); } }
+  @media (prefers-reduced-motion: reduce) { .rotate-phone { animation: none; transform: rotate(-90deg); } }
+  .rotate-prompt .rp-title { font: 800 21px/1.2 var(--font-display); text-transform: uppercase; letter-spacing: 0.02em; }
+  .rotate-prompt .rp-copy { color: var(--muted); max-width: 34ch; font-size: 14px; }
+  @media (orientation: portrait) and (max-width: 900px) {
+    .rotate-prompt { display: flex; }
+    #startscreen, #app { display: none !important; }
+  }
+</style>
+
+<div class="rotate-prompt" id="rotatePrompt" role="status" aria-live="polite">
+  <div class="rotate-phone" aria-hidden="true"></div>
+  <div class="rp-title">Turn Your Device</div>
+  <div class="rp-copy">Baseline GM is built for landscape — scoreboards, brackets, and trade boards need the room. Rotate to keep playing.</div>
+</div>
+
+<div class="startscreen" id="startscreen">
+  <div class="start-card">
+    <h1 class="start-title">Baseline <span>GM</span></h1>
+    <p class="start-copy">Run a full NBA front office in your browser: an 82-game season, a play-in tournament, a real playoff bracket, end-of-season awards, a draft lottery, free agency under a real cap, and CPU teams that trade with you — and each other — on their own. Pick a franchise to run, or spectate a fully autonomous league.</p>
+    <div id="teamPicker"></div>
+    <div class="start-actions">
+      <button class="btn btn--primary" id="startBtn">Start Franchise</button>
+      <button class="btn btn--ghost" id="spectateBtn">Spectate — Full Auto League</button>
+      <span class="muted" id="startResumeNote" style="font-size:12.5px;"></span>
+    </div>
+  </div>
+</div>
+
+<div id="app" class="is-hidden">
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-mark">BGM</div>
+    </div>
+    <nav class="breadcrumb" aria-label="Breadcrumb">
+      <span class="crumb brand-title-crumb">Baseline GM</span>
+      <span class="sep">&rsaquo;</span>
+      <span class="crumb" id="crumbTeam">—</span>
+      <span class="sep">&rsaquo;</span>
+      <span class="crumb current" id="crumbSection">Standings</span>
+    </nav>
+    <span class="phase-pill" id="statusPhase" data-phase="regular">—</span>
+    <div class="topbar-actions" id="topbarActions"></div>
+    <div class="topbar-spacer"></div>
+    <div class="chip-row">
+      <select class="chip-select" id="myTeamSelect" aria-label="My team"></select>
+      <span class="team-chip num" id="yearChip">2027</span>
+    </div>
+    <button class="btn btn--ghost btn--sm btn--danger" id="resetBtn" title="Wipe this franchise and start over">Reset</button>
+  </header>
+
+  <nav class="nav" id="navRail" aria-label="Sections"></nav>
+
+  <main class="main">
+    <section class="view" id="view-standings">
+      <div class="panel">
+        <div class="panel-head"><div><div class="panel-title">Latest Results</div><div class="panel-sub" id="tickerSub">No games played yet.</div></div></div>
+        <div class="ticker" id="ticker"></div>
+      </div>
+      <div class="grid-2">
+        <div class="panel">
+          <div class="panel-head"><div class="panel-title">Eastern Conference</div><div class="panel-sub">Top 6 auto-qualify &middot; 7-10 play in</div></div>
+          <div class="table-wrap"><table class="stat-table" id="standingsEast"></table></div>
+        </div>
+        <div class="panel">
+          <div class="panel-head"><div class="panel-title">Western Conference</div><div class="panel-sub">Top 6 auto-qualify &middot; 7-10 play in</div></div>
+          <div class="table-wrap"><table class="stat-table" id="standingsWest"></table></div>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><div class="panel-title">Champions</div><div class="panel-sub">Franchise history</div></div>
+        <div id="historyList"></div>
+      </div>
+    </section>
+
+    <section class="view" id="view-roster">
+      <div class="panel">
+        <div class="panel-head">
+          <div><div class="panel-title" id="rosterTeamTitle">Roster</div><div class="panel-sub" id="rosterTeamSub"></div></div>
+          <select class="chip-select" id="rosterTeamSelect"></select>
+        </div>
+        <div class="grid-4" id="rosterSummary" style="margin-bottom:14px;"></div>
+        <div class="table-wrap"><table class="stat-table" id="rosterTable"></table></div>
+      </div>
+    </section>
+
+    <section class="view" id="view-schedule">
+      <div class="panel">
+        <div class="panel-head">
+          <div><div class="panel-title">Schedule &amp; Results</div><div class="panel-sub" id="scheduleSub"></div></div>
+          <select class="chip-select" id="scheduleTeamSelect"></select>
+        </div>
+        <div class="table-wrap"><table class="stat-table" id="scheduleTable"></table></div>
+      </div>
+    </section>
+
+    <section class="view" id="view-playoffs">
+      <div class="panel" id="playoffsPanel"></div>
+    </section>
+
+    <section class="view" id="view-awards">
+      <div class="panel panel--gold" id="awardsPanel"></div>
+    </section>
+
+    <section class="view" id="view-draft">
+      <div class="panel" id="draftPanel"></div>
+    </section>
+
+    <section class="view" id="view-freeagency">
+      <div class="panel" id="faPanel"></div>
+    </section>
+
+    <section class="view" id="view-trade">
+      <div class="panel" id="tradePanel"></div>
+    </section>
+
+    <section class="view" id="view-log">
+      <div class="panel panel--flat">
+        <div class="panel-head"><div class="panel-title">Transaction &amp; Game Log</div><div class="panel-sub">Most recent first</div></div>
+        <div class="log-list" id="logList"></div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div class="modal-backdrop" id="tradeAlertBackdrop">
+  <div class="modal-card trade-alert-card" id="tradeAlertCard"></div>
+</div>
+
+<div class="modal-backdrop" id="boxScoreBackdrop">
+  <div class="modal-card box-modal" id="boxScoreCard"></div>
+</div>
+<script>
+/* ============================================================
+   ENGINE — pure simulation logic, no DOM access.
+   ============================================================ */
+/* NBA-SIM engine: pure data/logic, no DOM. Safe to run under Node or in a browser <script>. */
+(function (root) {
+"use strict";
+
+// ---------- RNG ----------
+function rnd() { return Math.random(); }
+function rndInt(a, b) { return a + Math.floor(rnd() * (b - a + 1)); }
+function choice(arr) { return arr[rndInt(0, arr.length - 1)]; }
+function shuffle(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = rndInt(0, i);
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+function sample(arr, n) {
+  const copy = arr.slice();
+  shuffle(copy);
+  return copy.slice(0, n);
+}
+function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+
+// ---------- Reference data ----------
+const POSITIONS = ["PG", "SG", "SF", "PF", "C"];
+const SALARY_CAP = 140.0;
+const ROSTER_MAX = 15;
+const ROSTER_MIN = 12;
+
+const TEAM_DATA = [
+  ["Boston", "Celtics", "BOS", "East", "Atlantic"],
+  ["Brooklyn", "Nets", "BKN", "East", "Atlantic"],
+  ["New York", "Knicks", "NYK", "East", "Atlantic"],
+  ["Philadelphia", "76ers", "PHI", "East", "Atlantic"],
+  ["Toronto", "Raptors", "TOR", "East", "Atlantic"],
+  ["Chicago", "Bulls", "CHI", "East", "Central"],
+  ["Cleveland", "Cavaliers", "CLE", "East", "Central"],
+  ["Detroit", "Pistons", "DET", "East", "Central"],
+  ["Indiana", "Pacers", "IND", "East", "Central"],
+  ["Milwaukee", "Bucks", "MIL", "East", "Central"],
+  ["Atlanta", "Hawks", "ATL", "East", "Southeast"],
+  ["Charlotte", "Hornets", "CHA", "East", "Southeast"],
+  ["Miami", "Heat", "MIA", "East", "Southeast"],
+  ["Orlando", "Magic", "ORL", "East", "Southeast"],
+  ["Washington", "Wizards", "WAS", "East", "Southeast"],
+  ["Denver", "Nuggets", "DEN", "West", "Northwest"],
+  ["Minnesota", "Timberwolves", "MIN", "West", "Northwest"],
+  ["Oklahoma City", "Thunder", "OKC", "West", "Northwest"],
+  ["Portland", "Trail Blazers", "POR", "West", "Northwest"],
+  ["Utah", "Jazz", "UTA", "West", "Northwest"],
+  ["Golden State", "Warriors", "GSW", "West", "Pacific"],
+  ["LA", "Clippers", "LAC", "West", "Pacific"],
+  ["Los Angeles", "Lakers", "LAL", "West", "Pacific"],
+  ["Phoenix", "Suns", "PHX", "West", "Pacific"],
+  ["Sacramento", "Kings", "SAC", "West", "Pacific"],
+  ["Dallas", "Mavericks", "DAL", "West", "Southwest"],
+  ["Houston", "Rockets", "HOU", "West", "Southwest"],
+  ["Memphis", "Grizzlies", "MEM", "West", "Southwest"],
+  ["New Orleans", "Pelicans", "NOP", "West", "Southwest"],
+  ["San Antonio", "Spurs", "SAS", "West", "Southwest"],
+];
+
+const FIRST_NAMES = ["James","Michael","Chris","David","Marcus","Andre","Terrence","Jordan","Malik","Anthony","Devin","Isaiah","Trey","Xavier","Elijah","Jalen","Cameron","Tyler","Brandon","Darius","Kevin","Julian","Aaron","Nathan","DeShawn","Reggie","Steven","Kyle","Zion","Amir","Cole","Damien","Emmanuel","Gabriel","Hassan","Ibrahim","Jaylen","Keon","Lamar","Mason","Noah","Omar","Preston","Quincy","Rashad","Sean","Tariq","Vince","Wesley","Zach","Adrian","Bryce","Corey","Elias","Felix","Grant","Hunter","Isaac","Jaxon","Khalil","Leon","Miles"];
+const LAST_NAMES = ["Johnson","Williams","Brown","Davis","Miller","Wilson","Anderson","Thomas","Taylor","Moore","Jackson","Martin","Lee","Perez","White","Harris","Clark","Lewis","Robinson","Walker","Young","Allen","King","Wright","Scott","Green","Baker","Adams","Nelson","Carter","Mitchell","Roberts","Turner","Phillips","Campbell","Parker","Evans","Edwards","Collins","Stewart","Sanchez","Morris","Rogers","Reed","Cook","Morgan","Bell","Murphy","Bailey","Rivera","Cooper","Richardson","Cox","Howard","Ward","Torres","Peterson","Gray","Ramirez","Watson","Brooks","Kelly","Sanders"];
+
+function randomName() { return `${choice(FIRST_NAMES)} ${choice(LAST_NAMES)}`; }
+
+let _idCounter = 1;
+function nextId() { return _idCounter++; }
+// Must be called after restoring a saved game, before generating any new
+// players/picks, so freshly-minted ids can't collide with loaded ones
+// (ids are used as roster/box-score/trade lookup keys).
+function setIdCounter(n) { _idCounter = Math.max(_idCounter, n); }
+
+// ---------- Player / Team generation ----------
+const OVERALL_TIERS = [
+  [0.03, [90, 99]], [0.12, [80, 89]], [0.35, [68, 79]], [0.35, [58, 67]], [0.15, [45, 57]],
+];
+const AGE_TIERS = [[0.25, [20, 23]], [0.35, [24, 28]], [0.25, [29, 32]], [0.15, [33, 38]]];
+const PROSPECT_TIERS = [[0.02, [72, 82]], [0.10, [62, 71]], [0.38, [52, 61]], [0.35, [44, 51]], [0.15, [36, 43]]];
+
+function weightedRange(tiers) {
+  const r = rnd();
+  let cum = 0;
+  for (const [prob, range] of tiers) {
+    cum += prob;
+    if (r <= cum) return range;
+  }
+  return tiers[tiers.length - 1][1];
+}
+
+function veteranSalary(overall, age) {
+  const scaled = Math.max(0, overall - 40) / 59.0;
+  let salary = Math.pow(scaled, 2.2) * 48.0 + (rnd() * 2 - 1);
+  if (age >= 34) salary *= 0.75;
+  return Math.round(clamp(Math.max(1.0, salary), 1, 55) * 10) / 10;
+}
+
+function rookieScaleSalary(pick) {
+  pick = clamp(pick, 1, 60);
+  const slope = (10.0 - 1.3) / 59.0;
+  return Math.round((10.0 - slope * (pick - 1)) * 10) / 10;
+}
+
+function makePlayer(opts) {
+  opts = opts || {};
+  const position = opts.position || choice(POSITIONS);
+  const age = opts.age != null ? opts.age : rndInt(...weightedRange(AGE_TIERS));
+  const overallRange = opts.overallRange || weightedRange(OVERALL_TIERS);
+  const overall = rndInt(...overallRange);
+  const offense = clamp(overall + rndInt(-8, 8), 25, 99);
+  const defense = clamp(overall + rndInt(-8, 8), 25, 99);
+  let potential;
+  if (age < 23) potential = clamp(overall + rndInt(6, 22), overall, 99);
+  else if (age < 27) potential = clamp(overall + rndInt(0, 8), overall, 99);
+  else potential = overall;
+  const experience = opts.rookie ? 0 : Math.max(0, age - 19);
+  const salary = opts.rookie && opts.pick ? rookieScaleSalary(opts.pick) : veteranSalary(overall, age);
+  const contractYears = opts.rookie ? 3 : rndInt(1, 4);
+  // Only an actual draftee should ever be Rookie-of-the-Year eligible.
+  // Veterans generated at league genesis already have "experience" years
+  // under their belt, so seed seasonsPlayed the same way or every player on
+  // the very first opening-day rosters would look like a rookie.
+  const seasonsPlayed = opts.rookie ? 0 : experience;
+  return {
+    id: nextId(), name: randomName(), pos: position, age, ovr: overall,
+    off: offense, def: defense, pot: potential, salary, exp: experience,
+    contractYears, seasonsPlayed,
+    team: null, stats: { gp: 0, pts: 0, reb: 0, ast: 0 }, retired: false,
+  };
+}
+
+function makeRoster(size) {
+  size = size || 14;
+  const roster = [];
+  for (const pos of POSITIONS) {
+    roster.push(makePlayer({ position: pos }));
+    roster.push(makePlayer({ position: pos }));
+  }
+  while (roster.length < size) roster.push(makePlayer({}));
+  return roster;
+}
+
+function makeTeam(data, startYear) {
+  const [city, nickname, abbr, conference, division] = data;
+  const roster = makeRoster(14);
+  for (const p of roster) p.team = abbr;
+  const picks = [];
+  for (const offset of [0, 1, 2]) {
+    for (const round of [1, 2]) {
+      picks.push({ year: startYear + offset, round, originalTeam: abbr, ownerTeam: abbr });
+    }
+  }
+  return {
+    city, nickname, abbr, conference, division, roster,
+    wins: 0, losses: 0, picks, user: false,
+  };
+}
+
+function teamName(t) { return `${t.city} ${t.nickname}`; }
+function winPct(t) { const gp = t.wins + t.losses; return gp ? t.wins / gp : 0; }
+function payroll(t) { return Math.round(t.roster.reduce((s, p) => s + p.salary, 0) * 100) / 100; }
+function rotation(t, n) { return t.roster.slice().sort((a, b) => b.ovr - a.ovr).slice(0, n || 9); }
+function positionalNeed(t) {
+  const counts = { PG: 0, SG: 0, SF: 0, PF: 0, C: 0 };
+  for (const p of rotation(t, 9)) counts[p.pos]++;
+  return counts;
+}
+
+function buildLeague(startYear) {
+  const teams = {};
+  for (const d of TEAM_DATA) teams[d[2]] = makeTeam(d, startYear);
+  return teams;
+}
+
+function generateDraftClass(year, size) {
+  size = size || 60;
+  const prospects = [];
+  for (let i = 0; i < size; i++) {
+    const age = rndInt(19, 22);
+    const overallRange = weightedRange(PROSPECT_TIERS);
+    prospects.push(makePlayer({ age, overallRange, rookie: true }));
+  }
+  return prospects;
+}
+
+// ---------- Schedule (round-robin circle method) ----------
+function roundRobinRounds(teamAbbrs) {
+  const n = teamAbbrs.length;
+  if (n % 2 !== 0) throw new Error("round robin requires an even number of teams");
+  const fixed = teamAbbrs[0];
+  let rotating = teamAbbrs.slice(1);
+  const rounds = [];
+  for (let r = 0; r < n - 1; r++) {
+    const roundTeams = [fixed, ...rotating];
+    const pairs = [];
+    for (let i = 0; i < n / 2; i++) pairs.push([roundTeams[i], roundTeams[n - 1 - i]]);
+    rounds.push(pairs);
+    rotating = [rotating[rotating.length - 1], ...rotating.slice(0, -1)];
+  }
+  return rounds;
+}
+
+function generateSchedule(teamAbbrs, gamesPerTeam) {
+  gamesPerTeam = gamesPerTeam || 82;
+  const n = teamAbbrs.length;
+  const baseRounds = roundRobinRounds(teamAbbrs);
+  const roundsPerCycle = n - 1;
+  const fullCycles = Math.floor(gamesPerTeam / roundsPerCycle);
+  const remainder = gamesPerTeam % roundsPerCycle;
+
+  const allRounds = [];
+  for (let cycle = 0; cycle < fullCycles; cycle++) {
+    for (const pairs of baseRounds) {
+      const oriented = cycle % 2 === 0 ? pairs.slice() : pairs.map(([a, b]) => [b, a]);
+      allRounds.push(oriented);
+    }
+  }
+  if (remainder) {
+    const chosen = sample([...Array(roundsPerCycle).keys()], remainder);
+    for (const idx of chosen) {
+      const oriented = baseRounds[idx].map(([a, b]) => (rnd() < 0.5 ? [a, b] : [b, a]));
+      allRounds.push(oriented);
+    }
+  }
+  shuffle(allRounds);
+
+  const games = [];
+  allRounds.forEach((pairs, i) => {
+    const day = i + 1;
+    for (const [home, away] of pairs) {
+      games.push({ day, home, away, played: false, hs: 0, as: 0, box: null });
+    }
+  });
+  return games;
+}
+
+// ---------- Game simulation ----------
+const BASE_SCORE = 108.0;
+const HOME_ADV = 2.5;
+const SCORE_STDEV = 9.5;
+const REBOUND_WEIGHT = { PG: 0.6, SG: 0.75, SF: 1.0, PF: 1.25, C: 1.45 };
+const ASSIST_WEIGHT = { PG: 1.6, SG: 1.15, SF: 0.95, PF: 0.75, C: 0.55 };
+
+function gauss(mean, sd) {
+  let u = 0, v = 0;
+  while (u === 0) u = rnd();
+  while (v === 0) v = rnd();
+  return mean + sd * Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+}
+
+function teamRatings(team) {
+  const rot = rotation(team, 9);
+  if (!rot.length) return [50, 50];
+  const weights = [1.3, 1.2, 1.15, 1.1, 1.05, 0.9, 0.8, 0.7, 0.6].slice(0, rot.length);
+  const totalW = weights.reduce((a, b) => a + b, 0);
+  const off = rot.reduce((s, p, i) => s + p.off * weights[i], 0) / totalW;
+  const def = rot.reduce((s, p, i) => s + p.def * weights[i], 0) / totalW;
+  return [off, def];
+}
+
+function distribute(total, weights) {
+  if (total <= 0 || !weights.length) return weights.map(() => 0);
+  const jittered = weights.map((w) => Math.max(0.05, w * (0.7 + rnd() * 0.6)));
+  const s = jittered.reduce((a, b) => a + b, 0);
+  const raw = jittered.map((w) => (total * w) / s);
+  const out = raw.map((x) => Math.floor(x));
+  let remainder = total - out.reduce((a, b) => a + b, 0);
+  const order = raw.map((v, i) => [v - out[i], i]).sort((a, b) => b[0] - a[0]);
+  let k = 0;
+  while (remainder > 0) { out[order[k % order.length][1]]++; remainder--; k++; }
+  return out;
+}
+
+function boxScore(team, points) {
+  const rot = rotation(team, 9);
+  if (!rot.length) return {};
+  const ptWeights = rot.map((p) => Math.pow(Math.max(1, p.off), 1.6));
+  const pts = distribute(points, ptWeights);
+  const rebWeights = rot.map((p) => Math.max(1, p.def) * REBOUND_WEIGHT[p.pos]);
+  const rebs = distribute(rndInt(37, 49), rebWeights);
+  const astWeights = rot.map((p) => Math.max(1, p.off) * ASSIST_WEIGHT[p.pos]);
+  const asts = distribute(rndInt(19, 31), astWeights);
+  const box = {};
+  // Name/pos/team are snapshotted here (not just looked up live) so a saved
+  // box score stays fully renderable even after the player is later traded,
+  // released, or retires.
+  rot.forEach((p, i) => { box[p.id] = { pts: pts[i], reb: rebs[i], ast: asts[i], name: p.name, pos: p.pos, team: team.abbr }; });
+  return box;
+}
+
+function simulateGame(home, away) {
+  const [homeOff, homeDef] = teamRatings(home);
+  const [awayOff, awayDef] = teamRatings(away);
+  const homeExpected = BASE_SCORE + (homeOff - awayDef) * 0.35 + HOME_ADV;
+  const awayExpected = BASE_SCORE + (awayOff - homeDef) * 0.35;
+  let homeScore = Math.max(60, Math.round(gauss(homeExpected, SCORE_STDEV)));
+  let awayScore = Math.max(60, Math.round(gauss(awayExpected, SCORE_STDEV)));
+  while (homeScore === awayScore) {
+    if (rnd() < 0.5) homeScore += rndInt(1, 9); else awayScore += rndInt(1, 9);
+  }
+  const box = { ...boxScore(home, homeScore), ...boxScore(away, awayScore) };
+  return { home: home.abbr, away: away.abbr, homeScore, awayScore, box, winner: homeScore > awayScore ? home.abbr : away.abbr };
+}
+
+function applyBoxScore(team, result) {
+  for (const p of team.roster) {
+    const stat = result.box[p.id];
+    if (stat) {
+      p.stats.gp++; p.stats.pts += stat.pts; p.stats.reb += stat.reb; p.stats.ast += stat.ast;
+    }
+  }
+}
+
+// ---------- Season / standings ----------
+function remainingDays(league) {
+  const days = new Set();
+  for (const g of league.schedule) if (!g.played) days.add(g.day);
+  return [...days].sort((a, b) => a - b);
+}
+function isRegularSeasonComplete(league) { return league.schedule.every((g) => g.played); }
+
+function simulateDay(league, day) {
+  const results = [];
+  for (const game of league.schedule) {
+    if (game.day !== day || game.played) continue;
+    const home = league.teams[game.home];
+    const away = league.teams[game.away];
+    const result = simulateGame(home, away);
+    game.played = true; game.hs = result.homeScore; game.as = result.awayScore; game.box = result.box;
+    if (result.winner === home.abbr) { home.wins++; away.losses++; } else { away.wins++; home.losses++; }
+    applyBoxScore(home, result); applyBoxScore(away, result);
+    results.push(result);
+  }
+  return results;
+}
+
+function simulateNextDay(league) {
+  const days = remainingDays(league);
+  if (!days.length) return [null, []];
+  return [days[0], simulateDay(league, days[0])];
+}
+
+function simulateDays(league, n) {
+  const all = [];
+  for (let i = 0; i < n; i++) {
+    const [day, results] = simulateNextDay(league);
+    if (day == null) break;
+    all.push(...results);
+  }
+  return all;
+}
+
+function simulateRestOfSeason(league) {
+  const all = [];
+  for (const day of remainingDays(league)) all.push(...simulateDay(league, day));
+  return all;
+}
+
+function standings(league, conference) {
+  let teams = Object.values(league.teams);
+  if (conference) teams = teams.filter((t) => t.conference === conference);
+  return teams.slice().sort((a, b) => winPct(b) - winPct(a) || b.wins - a.wins);
+}
+
+function gamesBehind(leaderTeam, team) {
+  return ((leaderTeam.wins - team.wins) + (team.losses - leaderTeam.losses)) / 2;
+}
+
+// ---------- Playoffs ----------
+const HOME_PATTERN = [true, true, false, false, true, false, true];
+
+function simulateSeries(high, low, highSeed, lowSeed) {
+  const wins = { [high.abbr]: 0, [low.abbr]: 0 };
+  const games = [];
+  let g = 0;
+  while (wins[high.abbr] < 4 && wins[low.abbr] < 4) {
+    const homeIsHigh = HOME_PATTERN[g];
+    const home = homeIsHigh ? high : low;
+    const away = homeIsHigh ? low : high;
+    const result = simulateGame(home, away);
+    games.push(result);
+    wins[result.winner]++;
+    g++;
+  }
+  const winner = wins[high.abbr] === 4 ? high.abbr : low.abbr;
+  return { high: high.abbr, low: low.abbr, highSeed, lowSeed, games, wins, winner };
+}
+
+function order(a, b, seedIndex) {
+  return seedIndex[a.abbr] < seedIndex[b.abbr] ? [a, b] : [b, a];
+}
+
+function runConferenceBracket(seeds) {
+  if (seeds.length < 8) throw new Error("need 8 seeded teams");
+  const seedIndex = {};
+  seeds.forEach((t, i) => { seedIndex[t.abbr] = i + 1; });
+  const r1Matchups = [[0, 7], [3, 4], [2, 5], [1, 6]];
+  const round1 = [];
+  const winners = [];
+  for (const [i, j] of r1Matchups) {
+    const high = seeds[i], low = seeds[j];
+    const s = simulateSeries(high, low, seedIndex[high.abbr], seedIndex[low.abbr]);
+    round1.push(s);
+    winners.push(s.winner === high.abbr ? high : low);
+  }
+  let [hi, lo] = order(winners[0], winners[1], seedIndex);
+  const s2a = simulateSeries(hi, lo, seedIndex[hi.abbr], seedIndex[lo.abbr]);
+  [hi, lo] = order(winners[2], winners[3], seedIndex);
+  const s2b = simulateSeries(hi, lo, seedIndex[hi.abbr], seedIndex[lo.abbr]);
+  const round2 = [s2a, s2b];
+  const w2a = s2a.winner === winners[0].abbr ? winners[0] : winners[1];
+  const w2b = s2b.winner === winners[2].abbr ? winners[2] : winners[3];
+  [hi, lo] = order(w2a, w2b, seedIndex);
+  const confFinals = simulateSeries(hi, lo, seedIndex[hi.abbr], seedIndex[lo.abbr]);
+  const champion = confFinals.winner === hi.abbr ? hi : lo;
+  return { seeds, round1, round2, confFinals, champion };
+}
+
+// ---------- Play-In Tournament (seeds 7-10 settle the 7 & 8 seeds) ----------
+function runPlayIn(league, conference) {
+  const table = standings(league, conference);
+  const [seed7, seed8, seed9, seed10] = table.slice(6, 10);
+
+  const game78 = simulateGame(seed7, seed8); // higher seed hosts
+  const winner78 = game78.winner === seed7.abbr ? seed7 : seed8;
+  const loser78 = winner78 === seed7 ? seed8 : seed7;
+
+  const game910 = simulateGame(seed9, seed10); // higher seed hosts
+  const winner910 = game910.winner === seed9.abbr ? seed9 : seed10;
+  const loser910 = winner910 === seed9 ? seed10 : seed9;
+
+  const game8seed = simulateGame(loser78, winner910); // better-seeded team hosts
+  const finalSeed8 = game8seed.winner === loser78.abbr ? loser78 : winner910;
+
+  return {
+    conference,
+    seeds: { seed7, seed8, seed9, seed10 },
+    game78: { result: game78, winner: winner78, loser: loser78 },
+    game910: { result: game910, winner: winner910, loser: loser910 },
+    game8seed: { result: game8seed, winner: finalSeed8, loser: finalSeed8 === loser78 ? winner910 : loser78 },
+    finalSeed7: winner78,
+    finalSeed8,
+  };
+}
+
+function playoffSeedsFromPlayIn(league, conference, playIn) {
+  const top6 = standings(league, conference).slice(0, 6);
+  return [...top6, playIn.finalSeed7, playIn.finalSeed8];
+}
+
+function runPlayoffs(league) {
+  const eastPlayIn = runPlayIn(league, "East");
+  const westPlayIn = runPlayIn(league, "West");
+  const eastSeeds = playoffSeedsFromPlayIn(league, "East", eastPlayIn);
+  const westSeeds = playoffSeedsFromPlayIn(league, "West", westPlayIn);
+  const east = runConferenceBracket(eastSeeds);
+  const west = runConferenceBracket(westSeeds);
+  const eChamp = east.champion, wChamp = west.champion;
+  const [hi, lo] = winPct(eChamp) >= winPct(wChamp) ? [eChamp, wChamp] : [wChamp, eChamp];
+  const finals = simulateSeries(hi, lo, 0, 0);
+  const champion = finals.winner === hi.abbr ? hi : lo;
+  league.lastPostseasonQualifiers = [...eastSeeds, ...westSeeds].map((t) => t.abbr);
+  return { eastPlayIn, westPlayIn, east, west, finals, champion };
+}
+
+// ---------- Draft ----------
+const LOTTERY_ODDS = [140, 140, 140, 125, 105, 90, 75, 60, 45, 30, 20, 15, 10, 5];
+
+function runLottery(nonPlayoffWorstFirst) {
+  const pool = nonPlayoffWorstFirst.slice();
+  const odds = LOTTERY_ODDS.slice(0, pool.length);
+  const top = [];
+  for (let k = 0; k < Math.min(4, pool.length); k++) {
+    const total = odds.reduce((a, b) => a + b, 0);
+    const r = rnd() * total;
+    let cum = 0;
+    for (let i = 0; i < odds.length; i++) {
+      cum += odds[i];
+      if (r <= cum) { top.push(pool.splice(i, 1)[0]); odds.splice(i, 1); break; }
+    }
+  }
+  return top.concat(pool);
+}
+
+// Non-playoff teams, worst record first. Uses the actual play-in outcome when
+// available (league.lastPostseasonQualifiers) rather than raw top-8 standings,
+// since a 9 or 10 seed can leapfrog into the playoffs via the play-in games.
+function lotteryPool(league) {
+  const east = standings(league, "East");
+  const west = standings(league, "West");
+  const playoffAbbrs = new Set(
+    league.lastPostseasonQualifiers || [...east.slice(0, 8), ...west.slice(0, 8)].map((t) => t.abbr)
+  );
+  const allSorted = [...east, ...west].sort((a, b) => winPct(a) - winPct(b) || a.wins - b.wins);
+  return {
+    nonPlayoff: allSorted.filter((t) => !playoffAbbrs.has(t.abbr)),
+    playoffTeams: allSorted.filter((t) => playoffAbbrs.has(t.abbr)),
+  };
+}
+
+// Runs the lottery exactly once and stores the result on the league so every
+// later call (draft order, UI reveal) agrees on the same drawn order — the
+// lottery must never be re-rolled after the reveal is shown to the user.
+function runDraftLottery(league) {
+  const { nonPlayoff } = lotteryPool(league);
+  const preOrder = nonPlayoff.map((t) => t.abbr);
+  const preOdds = {};
+  nonPlayoff.forEach((t, i) => { preOdds[t.abbr] = LOTTERY_ODDS[Math.min(i, LOTTERY_ODDS.length - 1)] / 10; });
+  const drawn = runLottery(nonPlayoff);
+  const rows = drawn.map((t, i) => {
+    const prePos = preOrder.indexOf(t.abbr) + 1;
+    const newPos = i + 1;
+    return { pick: newPos, team: t, oddsPct: preOdds[t.abbr], move: prePos - newPos };
+  });
+  const reveal = { rows, winner: drawn[0] };
+  league.lotteryOrder = drawn.map((t) => t.abbr);
+  league.lotteryReveal = reveal;
+  return reveal;
+}
+
+function draftOrder(league, roundNum) {
+  if (roundNum === 1) {
+    const { nonPlayoff, playoffTeams } = lotteryPool(league);
+    const lotteryOrder = league.lotteryOrder || runLottery(nonPlayoff).map((t) => t.abbr);
+    return [...lotteryOrder, ...playoffTeams.map((t) => t.abbr)];
+  }
+  const all = Object.values(league.teams).sort((a, b) => winPct(a) - winPct(b) || a.wins - b.wins);
+  return all.map((t) => t.abbr);
+}
+
+function orderedPicks(league, year) {
+  const allPicks = [];
+  for (const t of Object.values(league.teams)) {
+    for (const dp of t.picks) if (dp.year === year) allPicks.push(dp);
+  }
+  const result = [];
+  for (const roundNum of [1, 2]) {
+    const byOriginal = {};
+    for (const dp of allPicks) if (dp.round === roundNum) byOriginal[dp.originalTeam] = dp;
+    for (const abbr of draftOrder(league, roundNum)) {
+      if (byOriginal[abbr]) result.push(byOriginal[abbr]);
+    }
+  }
+  return result;
+}
+
+function positionalScore(player, team) {
+  const needs = positionalNeed(team);
+  const thinness = Math.max(0, 2 - (needs[player.pos] || 0));
+  return player.pot * 0.5 + player.ovr * 0.5 + thinness * 3 + (rnd() * 6 - 3);
+}
+
+function cpuSelectIndex(team, available) {
+  let bestI = 0, bestScore = -Infinity;
+  available.forEach((p, i) => {
+    const s = positionalScore(p, team);
+    if (s > bestScore) { bestScore = s; bestI = i; }
+  });
+  return bestI;
+}
+
+// Runs the whole draft synchronously, using onTheClock(team, available, pickNum, round)
+// -> index, for user-controlled teams. Returns array of pick results and mutates league.
+function runDraft(league, year, onTheClock) {
+  year = year || league.year;
+  const picks = orderedPicks(league, year);
+  let available = league.draftClass.slice();
+  const results = [];
+  for (let i = 0; i < picks.length; i++) {
+    if (!available.length) break;
+    const dp = picks[i];
+    const team = league.teams[dp.ownerTeam];
+    let idx = null;
+    if (onTheClock && team.user) idx = onTheClock(team, available, i + 1, dp.round);
+    if (idx == null) idx = cpuSelectIndex(team, available);
+    idx = clamp(idx, 0, available.length - 1);
+    const player = available.splice(idx, 1)[0];
+    player.team = team.abbr;
+    player.exp = 0;
+    player.salary = rookieScaleSalary(i + 1);
+    team.roster.push(player);
+    results.push({ pick: i + 1, round: dp.round, team: team.abbr, player });
+    team.picks = team.picks.filter((p) => p !== dp);
+  }
+  league.draftClass = available;
+  return results;
+}
+
+function trimRosters(league) {
+  const released = {};
+  for (const [abbr, team] of Object.entries(league.teams)) {
+    if (team.roster.length <= ROSTER_MAX) continue;
+    team.roster.sort((a, b) => (b.ovr + b.pot) - (a.ovr + a.pot));
+    const cut = team.roster.slice(ROSTER_MAX);
+    team.roster = team.roster.slice(0, ROSTER_MAX);
+    for (const p of cut) p.team = null;
+    if (cut.length) released[abbr] = cut;
+  }
+  return released;
+}
+
+// ---------- Trade valuation & execution ----------
+function playerValue(p) {
+  const youthFactor = p.age < 25 ? 0.6 : 0.2;
+  const ageePenalty = Math.max(0, p.age - 30) * 1.4;
+  return p.ovr * 1.0 + Math.max(0, p.pot - p.ovr) * youthFactor - ageePenalty;
+}
+
+function pickValue(dp, league) {
+  const yearsAhead = Math.max(0, dp.year - league.year);
+  const discount = Math.pow(0.85, yearsAhead);
+  const originalTeam = league.teams[dp.originalTeam];
+  const estWinPct = originalTeam ? (originalTeam.wins + originalTeam.losses >= 10 ? winPct(originalTeam) : 0.5) : 0.5;
+  const base = dp.round === 1 ? 30 * (1 - estWinPct) + 6 : 9 * (1 - estWinPct) + 2;
+  return Math.max(1, base * discount);
+}
+
+function assetsValue(players, picks, league) {
+  return players.reduce((s, p) => s + playerValue(p), 0) + picks.reduce((s, dp) => s + pickValue(dp, league), 0);
+}
+
+// Evaluate a trade from `toTeam`'s perspective: toTeam sends `toSend`, receives `toReceive`.
+function evaluateTrade(league, toTeam, toSend, toReceive) {
+  const valueOut = assetsValue(toSend.players, toSend.picks, league);
+  const valueIn = assetsValue(toReceive.players, toReceive.picks, league);
+  const outgoingSalary = toSend.players.reduce((s, p) => s + p.salary, 0);
+  const incomingSalary = toReceive.players.reduce((s, p) => s + p.salary, 0);
+  const newPayroll = payroll(toTeam) - outgoingSalary + incomingSalary;
+  const capOk = newPayroll <= SALARY_CAP * 1.25;
+  const rosterCountOk = (toTeam.roster.length - toSend.players.length + toReceive.players.length) <= ROSTER_MAX + 2
+    && (toTeam.roster.length - toSend.players.length + toReceive.players.length) >= 1;
+  const fair = valueIn >= valueOut * 0.88;
+  const accept = fair && capOk && rosterCountOk;
+  let reason;
+  if (!capOk) reason = "would blow past a sane payroll limit";
+  else if (!rosterCountOk) reason = "would leave the roster too thin or too crowded";
+  else if (!fair) reason = "not enough value coming back";
+  else reason = "fair value for both sides";
+  return { accept, valueOut, valueIn, reason };
+}
+
+// Executes a trade between teamA and teamB. aPlayers/aPicks leave A to B; bPlayers/bPicks leave B to A.
+function executeTrade(league, teamAAbbr, aPlayers, aPicks, teamBAbbr, bPlayers, bPicks) {
+  const teamA = league.teams[teamAAbbr];
+  const teamB = league.teams[teamBAbbr];
+  const aPlayerIds = new Set(aPlayers.map((p) => p.id));
+  const bPlayerIds = new Set(bPlayers.map((p) => p.id));
+  teamA.roster = teamA.roster.filter((p) => !aPlayerIds.has(p.id));
+  teamB.roster = teamB.roster.filter((p) => !bPlayerIds.has(p.id));
+  for (const p of aPlayers) { p.team = teamBAbbr; teamB.roster.push(p); }
+  for (const p of bPlayers) { p.team = teamAAbbr; teamA.roster.push(p); }
+  for (const dp of aPicks) { dp.ownerTeam = teamBAbbr; }
+  for (const dp of bPicks) { dp.ownerTeam = teamAAbbr; }
+  teamA.picks = teamA.picks.filter((dp) => !aPicks.includes(dp)).concat(bPicks);
+  teamB.picks = teamB.picks.filter((dp) => !bPicks.includes(dp)).concat(aPicks);
+}
+
+// A light heuristic CPU-CPU trade engine: teams with a positional surplus shop
+// their weakest rotation player at that position to teams with a need there.
+function findSurplus(team) {
+  const needs = positionalNeed(team);
+  let maxPos = null, maxCount = 0;
+  for (const pos of POSITIONS) if (needs[pos] > maxCount) { maxCount = needs[pos]; maxPos = pos; }
+  if (maxCount < 3) return null;
+  const candidates = team.roster.filter((p) => p.pos === maxPos).sort((a, b) => a.ovr - b.ovr);
+  return candidates[0] || null;
+}
+
+function findNeediest(team, position) {
+  const needs = positionalNeed(team);
+  return (needs[position] || 0) <= 1;
+}
+
+function runCpuTradeRound(league, maxTrades) {
+  maxTrades = maxTrades || 6;
+  const executed = [];
+  const abbrs = shuffle(Object.keys(league.teams));
+  let attempts = 0;
+  for (let i = 0; i < abbrs.length && executed.length < maxTrades && attempts < 60; i++) {
+    const teamA = league.teams[abbrs[i]];
+    if (teamA.user) continue;
+    const surplusPlayer = findSurplus(teamA);
+    if (!surplusPlayer) continue;
+    for (let j = 0; j < abbrs.length; j++) {
+      if (abbrs[j] === abbrs[i]) continue;
+      const teamB = league.teams[abbrs[j]];
+      if (teamB.user) continue;
+      attempts++;
+      if (!findNeediest(teamB, surplusPlayer.pos)) continue;
+      const bSurplusPos = POSITIONS.find((pos) => pos !== surplusPlayer.pos && (positionalNeed(teamB)[pos] || 0) >= 3);
+      let bPlayer = null;
+      if (bSurplusPos) {
+        bPlayer = teamB.roster.filter((p) => p.pos === bSurplusPos).sort((a, b) => a.ovr - b.ovr)[0];
+      } else {
+        const targetValue = playerValue(surplusPlayer);
+        bPlayer = teamB.roster.slice().sort((a, b) => Math.abs(playerValue(a) - targetValue) - Math.abs(playerValue(b) - targetValue))[0];
+      }
+      if (!bPlayer) continue;
+      const evalB = evaluateTrade(league, teamB, { players: [bPlayer], picks: [] }, { players: [surplusPlayer], picks: [] });
+      const evalA = evaluateTrade(league, teamA, { players: [surplusPlayer], picks: [] }, { players: [bPlayer], picks: [] });
+      if (evalA.accept && evalB.accept) {
+        executeTrade(league, teamA.abbr, [surplusPlayer], [], teamB.abbr, [bPlayer], []);
+        executed.push({ teamA: teamA.abbr, teamB: teamB.abbr, aGives: surplusPlayer, bGives: bPlayer });
+        break;
+      }
+    }
+  }
+  return executed;
+}
+
+// ---------- End-of-season awards ----------
+const AWARD_MIN_GP = 10;
+
+function statLine(p) {
+  const gp = p.stats.gp || 0;
+  return gp ? { ppg: p.stats.pts / gp, rpg: p.stats.reb / gp, apg: p.stats.ast / gp, gp } : { ppg: 0, rpg: 0, apg: 0, gp: 0 };
+}
+
+function isStarter(p, team) { return rotation(team, 5).some((x) => x.id === p.id); }
+
+function topFinalists(pool, scoreFn, n) {
+  return pool
+    .map((x) => ({ ...x, score: scoreFn(x), line: statLine(x.p) }))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, n || 4);
+}
+
+function computeAwards(league) {
+  const qualified = [];
+  for (const team of Object.values(league.teams)) {
+    for (const p of team.roster) {
+      if (p.stats.gp >= AWARD_MIN_GP) qualified.push({ p, team });
+    }
+  }
+  const mvp = topFinalists(qualified, ({ p, team }) => {
+    const { ppg, rpg, apg } = statLine(p);
+    return ppg * 1.0 + rpg * 0.6 + apg * 0.9 + winPct(team) * 10;
+  });
+  const dpoy = topFinalists(qualified, ({ p }) => {
+    const { rpg } = statLine(p);
+    return p.def * 0.55 + rpg * 3.2;
+  });
+  const smoyPool = qualified.filter(({ p, team }) => !isStarter(p, team));
+  const smoy = topFinalists(smoyPool, ({ p }) => {
+    const { ppg, rpg, apg } = statLine(p);
+    return ppg * 1.1 + rpg * 0.4 + apg * 0.6;
+  });
+  const royPool = qualified.filter(({ p }) => p.seasonsPlayed === 0);
+  const roy = royPool.length ? topFinalists(royPool, ({ p }) => {
+    const { ppg, rpg, apg } = statLine(p);
+    return ppg * 1.0 + rpg * 0.5 + apg * 0.6;
+  }) : [];
+  return { mvp, dpoy, smoy, roy };
+}
+
+// ---------- Free agency ----------
+const TAX_LINE = 171.0;
+const APRON1 = 179.0;
+const APRON2 = 190.0;
+
+function capTier(payrollAmt) {
+  if (payrollAmt >= APRON2) return "apron2";
+  if (payrollAmt >= APRON1) return "apron1";
+  if (payrollAmt >= TAX_LINE) return "tax";
+  if (payrollAmt >= SALARY_CAP) return "cap";
+  return "room";
+}
+
+// Contracts tick down every offseason; anyone who hits 0 hits the open market.
+// _formerTeam is stamped so their old team gets first crack at re-signing them.
+function expireContracts(league) {
+  const freeAgents = [];
+  for (const team of Object.values(league.teams)) {
+    const keep = [];
+    for (const p of team.roster) {
+      p.contractYears -= 1;
+      if (p.contractYears <= 0) {
+        p._formerTeam = team.abbr;
+        p.team = null;
+        freeAgents.push(p);
+      } else {
+        keep.push(p);
+      }
+    }
+    team.roster = keep;
+  }
+  return freeAgents;
+}
+
+function generateExtraFreeAgents() {
+  const pool = [];
+  const n = rndInt(18, 26);
+  for (let i = 0; i < n; i++) pool.push(makePlayer({ age: rndInt(23, 35) }));
+  return pool;
+}
+
+function suggestContract(p) {
+  const years = p.age < 27 ? rndInt(3, 4) : p.age < 31 ? rndInt(2, 3) : rndInt(1, 2);
+  const salary = Math.round(veteranSalary(p.ovr, p.age) * (1 + rnd() * 0.15) * 10) / 10;
+  return { years, salary };
+}
+
+function reSignWillingness(p, team) {
+  const isKey = rotation(team, 9).some((x) => x.id === p.id);
+  return clamp(Math.round(50 + winPct(team) * 30 + (isKey ? 10 : -5) + rndInt(-10, 10)), 5, 95);
+}
+
+// Re-signing your own free agent uses Bird-rights logic: it can push a team
+// past any cap tier. Signing someone else's expiring/open-market player can't.
+function canSignOutside(team, salary) {
+  if (team.roster.length >= ROSTER_MAX) return false;
+  const tier = capTier(payroll(team));
+  if (tier === "apron2") return false;
+  if (tier === "apron1") return salary <= 14;
+  return true;
+}
+
+function resignPlayer(league, teamAbbr, player, pool, offer) {
+  const team = league.teams[teamAbbr];
+  offer = offer || suggestContract(player);
+  player.team = teamAbbr; player.salary = offer.salary; player.contractYears = offer.years;
+  delete player._formerTeam;
+  team.roster.push(player);
+  const idx = pool.indexOf(player);
+  if (idx >= 0) pool.splice(idx, 1);
+  return offer;
+}
+
+function signFreeAgent(league, teamAbbr, player, pool, offer) {
+  const team = league.teams[teamAbbr];
+  offer = offer || suggestContract(player);
+  if (!canSignOutside(team, offer.salary)) return null;
+  player.team = teamAbbr; player.salary = offer.salary; player.contractYears = offer.years;
+  delete player._formerTeam;
+  team.roster.push(player);
+  const idx = pool.indexOf(player);
+  if (idx >= 0) pool.splice(idx, 1);
+  return offer;
+}
+
+// CPU teams (never the user) get first right of refusal on their own free agents.
+function autoResignCpuTeams(league, pool) {
+  const log = [];
+  for (const team of Object.values(league.teams)) {
+    if (team.user) continue;
+    const own = pool.filter((p) => p._formerTeam === team.abbr);
+    for (const p of own) {
+      const willing = reSignWillingness(p, team);
+      const tier = capTier(payroll(team));
+      const doIt = willing >= 40 && !(tier === "apron2" && p.ovr < 72) && team.roster.length < ROSTER_MAX;
+      if (doIt) log.push({ type: "resign", team: team.abbr, player: p, offer: resignPlayer(league, team.abbr, p, pool) });
+    }
+  }
+  return log;
+}
+
+// Open-market bidding to mop up whatever's left in the pool. Used both for
+// CPU teams filling out their rosters and (in full-auto/spectator play) the
+// user's team too.
+function runFreeAgencyBiddingPass(league, pool, opts) {
+  opts = opts || {};
+  const excludeUser = !!opts.excludeUser;
+  const log = [];
+  const sorted = pool.slice().sort((a, b) => playerValue(b) - playerValue(a));
+  for (const p of sorted) {
+    let candidates = Object.values(league.teams).filter((t) => t.roster.length < ROSTER_MAX && (!excludeUser || !t.user));
+    if (!candidates.length) continue;
+    const offer = suggestContract(p);
+    candidates = candidates.filter((t) => canSignOutside(t, offer.salary));
+    if (!candidates.length) continue;
+    const scored = candidates.map((t) => {
+      const needBonus = Math.max(0, 2 - (positionalNeed(t)[p.pos] || 0)) * 5;
+      const roomBonus = Math.max(0, SALARY_CAP - payroll(t)) * 0.05;
+      return { t, score: needBonus + roomBonus + rnd() * 8 };
+    }).sort((a, b) => b.score - a.score);
+    const winner = scored[0].t;
+    signFreeAgent(league, winner.abbr, p, pool, offer);
+    log.push({ type: "sign", team: winner.abbr, player: p, offer });
+  }
+  return log;
+}
+
+// Kicks off free agency: expires contracts, lets CPU teams re-sign their own
+// guys immediately, and returns the remaining pool (incl. the user's own
+// expiring players) for the UI to let the user act on before the final
+// CPU-only bidding pass sweeps up whatever's left.
+function startFreeAgency(league) {
+  const expiring = expireContracts(league);
+  const extra = generateExtraFreeAgents();
+  const pool = expiring.concat(extra);
+  const cpuLog = autoResignCpuTeams(league, pool);
+  return { pool, cpuLog };
+}
+
+// ---------- Trade finder: CPU-initiated incoming offers ----------
+function generateTradeOffers(league, myTeamAbbr, count) {
+  count = count || 8;
+  const myTeam = league.teams[myTeamAbbr];
+  const others = Object.values(league.teams).filter((t) => t.abbr !== myTeamAbbr);
+  const offers = [];
+  let attempts = 0;
+  while (offers.length < count && attempts < 300 && myTeam.roster.length) {
+    attempts++;
+    const cpu = choice(others);
+    const needs = positionalNeed(cpu);
+    const wantPos = POSITIONS.slice().sort((a, b) => (needs[a] || 0) - (needs[b] || 0))[0];
+    let target = myTeam.roster.filter((p) => p.pos === wantPos).sort((a, b) => b.ovr - a.ovr)[0];
+    if (!target) target = choice(myTeam.roster);
+    if (!target || !cpu.roster.length) continue;
+    const targetVal = playerValue(target);
+    const give = cpu.roster.slice().sort((a, b) => Math.abs(playerValue(a) - targetVal) - Math.abs(playerValue(b) - targetVal))[0];
+    if (!give || give.id === target.id) continue;
+    let givePicks = [];
+    if (playerValue(give) < targetVal * 0.9 && cpu.picks.length) givePicks = [choice(cpu.picks)];
+    const valueIn = assetsValue([give], givePicks, league);
+    const valueOut = playerValue(target);
+    const ratio = valueOut > 0 ? valueIn / valueOut : 1;
+    if (ratio < 0.55 || ratio > 1.9) continue;
+    if (offers.some((o) => o.theyWantPlayers[0].id === target.id && o.cpuTeam === cpu.abbr)) continue;
+    const stars = clamp(Math.round(ratio * 2.3), 1, 5);
+    offers.push({
+      id: `${cpu.abbr}-${target.id}-${league.year}-${offers.length}`,
+      cpuTeam: cpu.abbr,
+      theyGivePlayers: [give], theyGivePicks: givePicks,
+      theyWantPlayers: [target], theyWantPicks: [],
+      stars, ratio,
+      incomingSalary: give.salary,
+    });
+  }
+  return offers.sort((a, b) => b.stars - a.stars);
+}
+
+// ---------- Offseason: aging, development, retirement ----------
+function ageAndDevelop(league) {
+  const retired = [];
+  for (const team of Object.values(league.teams)) {
+    const keep = [];
+    for (const p of team.roster) {
+      p.age += 1;
+      if (p.age < 24) p.ovr = clamp(p.ovr + rndInt(0, 3), p.ovr, p.pot);
+      else if (p.age < 29) p.ovr = clamp(p.ovr + rndInt(-1, 2), 25, p.pot);
+      else if (p.age >= 33) p.ovr = clamp(p.ovr - rndInt(1, 4), 25, 99);
+      p.pot = Math.max(p.pot, p.ovr);
+      p.seasonsPlayed = (p.seasonsPlayed || 0) + 1;
+      const retireChance = p.age >= 39 ? 0.9 : p.age >= 36 && p.ovr < 55 ? 0.35 : p.age >= 38 ? 0.4 : 0;
+      if (rnd() < retireChance) {
+        p.retired = true; p.team = null; retired.push(p);
+      } else {
+        keep.push(p);
+      }
+    }
+    team.roster = keep;
+    team.wins = 0; team.losses = 0;
+    for (const p of team.roster) p.stats = { gp: 0, pts: 0, reb: 0, ast: 0 };
+  }
+  return retired;
+}
+
+function addFuturePicks(league, year) {
+  for (const team of Object.values(league.teams)) {
+    team.picks.push({ year, round: 1, originalTeam: team.abbr, ownerTeam: team.abbr });
+    team.picks.push({ year, round: 2, originalTeam: team.abbr, ownerTeam: team.abbr });
+  }
+}
+
+// Full-auto convenience path (used by tests and spectator mode): runs the
+// lottery, draft, free agency, aging, and next-season setup back to back
+// with no pauses for human input.
+function runOffseason(league, onTheClock) {
+  runDraftLottery(league);
+  const draftResults = runDraft(league, league.year, onTheClock);
+  const fa = startFreeAgency(league);
+  const faBidLog = runFreeAgencyBiddingPass(league, fa.pool, { excludeUser: false });
+  const released = trimRosters(league);
+  const retired = ageAndDevelop(league);
+  addFuturePicks(league, league.year + 3);
+  const trades = runCpuTradeRound(league, 6);
+  league.history = league.history || [];
+  league.year += 1;
+  league.schedule = generateSchedule(Object.keys(league.teams), 82);
+  league.draftClass = generateDraftClass(league.year, 60);
+  league.phase = "regular";
+  league.lotteryOrder = null;
+  league.lotteryReveal = null;
+  return { draftResults, freeAgency: { ...fa, bidLog: faBidLog }, released, retired, trades };
+}
+
+// ---------- Public API ----------
+const api = {
+  rnd, rndInt, choice, shuffle, sample, clamp,
+  POSITIONS, SALARY_CAP, TAX_LINE, APRON1, APRON2, ROSTER_MAX, ROSTER_MIN, TEAM_DATA,
+  nextId, setIdCounter, makePlayer, makeRoster, makeTeam, buildLeague, generateDraftClass,
+  teamName, winPct, payroll, rotation, positionalNeed,
+  roundRobinRounds, generateSchedule,
+  teamRatings, simulateGame, applyBoxScore,
+  remainingDays, isRegularSeasonComplete, simulateDay, simulateNextDay, simulateDays, simulateRestOfSeason,
+  standings, gamesBehind,
+  runConferenceBracket, runPlayoffs, simulateSeries, runPlayIn, playoffSeedsFromPlayIn,
+  runLottery, runDraftLottery, draftOrder, orderedPicks, cpuSelectIndex, runDraft, trimRosters, rookieScaleSalary,
+  playerValue, pickValue, assetsValue, evaluateTrade, executeTrade, runCpuTradeRound,
+  computeAwards, statLine, isStarter,
+  capTier, expireContracts, generateExtraFreeAgents, suggestContract, reSignWillingness,
+  canSignOutside, resignPlayer, signFreeAgent, autoResignCpuTeams, runFreeAgencyBiddingPass, startFreeAgency,
+  generateTradeOffers,
+  ageAndDevelop, addFuturePicks, runOffseason,
+};
+
+if (typeof module !== "undefined" && module.exports) module.exports = api;
+if (typeof root !== "undefined") root.NBASIM = api;
+})(typeof window !== "undefined" ? window : globalThis);
+</script>
+<script>
+/* ============================================================
+   UI — state, rendering, and interaction. Uses window.NBASIM.
+   ============================================================ */
+(function () {
+"use strict";
+const E = window.NBASIM;
+const SAVE_KEY = "baseline-gm-save-v1";
+
+let S = null;
+
+function fmtPct(x) { return x.toFixed(3).replace(/^0/, ""); }
+function fmtSalary(x) { return "$" + x.toFixed(1) + "M"; }
+function teamLabel(abbr) { const t = S.league.teams[abbr]; return t ? `${t.city} ${t.nickname}` : abbr; }
+function esc(s) { return String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
+function starRating(value) {
+  const n = Math.max(1, Math.min(5, Math.ceil((value - 40) / 12)));
+  return "&#9733;".repeat(n) + '<span class="dim">' + "&#9733;".repeat(5 - n) + "</span>";
+}
+function starCount(value) { return Math.max(1, Math.min(5, Math.ceil((value - 40) / 12))); }
+
+function log(text, tag) {
+  S.log.push({ text, tag: tag || `Y${S.league.year}`, t: Date.now() });
+  if (S.log.length > 600) S.log.splice(0, S.log.length - 600);
+}
+
+/* ---------------- persistence ---------------- */
+function save() {
+  try { localStorage.setItem(SAVE_KEY, JSON.stringify(S)); } catch (e) { /* storage unavailable; ignore */ }
+}
+function loadSaved() {
+  try { const raw = localStorage.getItem(SAVE_KEY); return raw ? JSON.parse(raw) : null; } catch (e) { return null; }
+}
+function maxPlayerId(state) {
+  let max = 0;
+  const scan = (arr) => { for (const p of arr || []) max = Math.max(max, p.id); };
+  for (const t of Object.values(state.league.teams)) scan(t.roster);
+  scan(state.league.draftClass);
+  if (state.draft) scan(state.draft.available);
+  if (state.freeAgency) scan(state.freeAgency.pool);
+  return max;
+}
+
+/* ---------------- player lookup (box scores snapshot name/pos/team already) ---------------- */
+function findLivePlayer(id) {
+  for (const t of Object.values(S.league.teams)) {
+    const p = t.roster.find((x) => x.id === id);
+    if (p) return p;
+  }
+  return null;
+}
+
+/* ---------------- new game setup ---------------- */
+let pendingTeam = null;
+
+function renderTeamPicker() {
+  const wrap = document.getElementById("teamPicker");
+  const byConf = { East: [], West: [] };
+  for (const d of E.TEAM_DATA) byConf[d[3]].push(d);
+  wrap.innerHTML = ["East", "West"].map((conf) => `
+    <div class="conf-group">
+      <div class="label conf-label">${conf}ern Conference</div>
+      <div class="team-grid">
+        ${byConf[conf].map((d) => `<button type="button" class="team-btn" data-abbr="${d[2]}" aria-pressed="false">${esc(d[1])}</button>`).join("")}
+      </div>
+    </div>`).join("");
+  wrap.querySelectorAll(".team-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      wrap.querySelectorAll(".team-btn").forEach((b) => b.setAttribute("aria-pressed", "false"));
+      btn.setAttribute("aria-pressed", "true");
+      pendingTeam = btn.dataset.abbr;
+    });
+  });
+}
+
+function newFranchise(myTeamAbbr) {
+  const year = 2027;
+  const league = { year, teams: E.buildLeague(year), phase: "regular" };
+  league.schedule = E.generateSchedule(Object.keys(league.teams), 82);
+  league.draftClass = E.generateDraftClass(year, 60);
+  if (myTeamAbbr) league.teams[myTeamAbbr].user = true;
+  S = {
+    league, myTeam: myTeamAbbr || null, log: [], history: [],
+    tab: "standings", phase: "regular",
+    awards: null, playoffResult: null, playoffRevealStage: null,
+    freeAgency: null, draft: null,
+    tradeWindows: { w1: false, w2: false },
+    tradeAlertQueue: [], tradeAlertIndex: 0,
+    tradeFinderOffers: null, lastResults: [],
+  };
+  log(`Franchise founded. ${myTeamAbbr ? "You take over the " + teamLabel(myTeamAbbr) + "." : "Spectating the full league in auto-sim mode."}`, "NEW");
+  save();
+  bootApp();
+}
+
+function resumeFranchise(state) {
+  S = state;
+  E.setIdCounter(maxPlayerId(state) + 1);
+  bootApp();
+}
+
+/* ---------------- top bar / nav ---------------- */
+const TABS = [
+  { id: "standings", label: "Standings" },
+  { id: "roster", label: "Roster" },
+  { id: "schedule", label: "Schedule" },
+  { id: "playoffs", label: "Playoffs" },
+  { id: "awards", label: "Awards" },
+  { id: "draft", label: "Draft" },
+  { id: "freeagency", label: "Free Agency" },
+  { id: "trade", label: "Trade Center" },
+  { id: "log", label: "Log" },
+];
+
+function bootApp() {
+  document.getElementById("startscreen").classList.add("is-hidden");
+  document.getElementById("app").classList.remove("is-hidden");
+  window.scrollTo(0, 0);
+  renderNav();
+  renderMyTeamSelect();
+  renderAll();
+}
+
+function switchTab(id) {
+  S.tab = id;
+  window.scrollTo(0, 0);
+  renderAll();
+}
+
+function renderNav() {
+  const nav = document.getElementById("navRail");
+  nav.innerHTML = TABS.map((t) => `<button type="button" data-tab="${t.id}" role="tab" aria-selected="${S.tab === t.id}">${t.label}</button>`).join("");
+  nav.querySelectorAll("button").forEach((b) => b.addEventListener("click", () => switchTab(b.dataset.tab)));
+}
+
+function renderMyTeamSelect() {
+  const sel = document.getElementById("myTeamSelect");
+  const teams = Object.values(S.league.teams).sort((a, b) => E.teamName(a).localeCompare(E.teamName(b)));
+  sel.innerHTML = `<option value="">Spectator (Full Auto)</option>` +
+    teams.map((t) => `<option value="${t.abbr}" ${t.abbr === S.myTeam ? "selected" : ""}>${esc(E.teamName(t))}</option>`).join("");
+  sel.onchange = () => {
+    if (S.myTeam) S.league.teams[S.myTeam].user = false;
+    S.myTeam = sel.value || null;
+    if (S.myTeam) S.league.teams[S.myTeam].user = true;
+    log(S.myTeam ? `You take the controls of the ${teamLabel(S.myTeam)}.` : "You step back to spectator mode.", "GM");
+    save();
+    renderAll();
+  };
+}
+
+const PHASE_INFO = {
+  regular: { tier: "regular", text: "Regular Season" },
+  awards: { tier: "postseason", text: "Awards" },
+  playoffs: { tier: "postseason", text: "Postseason" },
+  lottery: { tier: "offseason", text: "Draft Lottery" },
+  draft: { tier: "offseason", text: "Draft" },
+  freeagency: { tier: "offseason", text: "Free Agency" },
+};
+
+function setHeaderChrome() {
+  document.getElementById("yearChip").textContent = `${S.league.year}–${String((S.league.year + 1) % 100).padStart(2, "0")}`;
+  document.getElementById("crumbTeam").textContent = S.myTeam ? teamLabel(S.myTeam) : "Spectator";
+  const tabDef = TABS.find((t) => t.id === S.tab);
+  document.getElementById("crumbSection").textContent = tabDef ? tabDef.label : "";
+  const info = PHASE_INFO[S.phase] || PHASE_INFO.regular;
+  const chip = document.getElementById("statusPhase");
+  chip.dataset.phase = info.tier;
+  chip.textContent = info.text;
+}
+
+function renderTopbarActions() {
+  const wrap = document.getElementById("topbarActions");
+  let html = "";
+  if (S.phase === "regular") {
+    if (E.isRegularSeasonComplete(S.league)) {
+      html = `<button class="btn btn--gold" id="actAwards">Reveal Awards</button>`;
+    } else {
+      html = `
+        <button class="btn" id="actSimDay">Sim Day</button>
+        <button class="btn" id="actSimWeek">Sim Week</button>
+        <button class="btn btn--primary" id="actSimRest">Sim Rest of Season</button>`;
+    }
+  }
+  wrap.innerHTML = html;
+  const bind = (id, fn) => { const el = document.getElementById(id); if (el) el.addEventListener("click", fn); };
+  bind("actSimDay", () => doSim(1));
+  bind("actSimWeek", () => doSim(7));
+  bind("actSimRest", () => doSim(Infinity));
+  bind("actAwards", revealAwards);
+}
+
+/* ---------------- trade alert carousel (used for mid-season + offseason CPU trades) ---------------- */
+function showTradeAlerts(trades, onDone) {
+  if (!trades || !trades.length) { if (onDone) onDone(); return; }
+  S.tradeAlertQueue = trades;
+  S.tradeAlertIndex = 0;
+  S.tradeAlertOnDone = onDone || null;
+  renderTradeAlertModal();
+  document.getElementById("tradeAlertBackdrop").classList.add("is-open");
+}
+
+function renderTradeAlertModal() {
+  const tr = S.tradeAlertQueue[S.tradeAlertIndex];
+  const card = document.getElementById("tradeAlertCard");
+  const isLast = S.tradeAlertIndex >= S.tradeAlertQueue.length - 1;
+  card.innerHTML = `
+    <div class="ta-eyebrow">League Trade &middot; ${S.tradeAlertIndex + 1} of ${S.tradeAlertQueue.length}</div>
+    <div class="ta-title">Trade Alert</div>
+    <div class="ta-teams">
+      <div>
+        <div class="ta-team-head">${esc(teamLabel(tr.teamB))} Acquire</div>
+        <div class="ta-asset">${esc(tr.aGives.name)} (${tr.aGives.pos} &middot; ${tr.aGives.ovr})</div>
+      </div>
+      <div>
+        <div class="ta-team-head">${esc(teamLabel(tr.teamA))} Acquire</div>
+        <div class="ta-asset">${esc(tr.bGives.name)} (${tr.bGives.pos} &middot; ${tr.bGives.ovr})</div>
+      </div>
+    </div>
+    <div class="ta-actions">
+      <button class="btn" id="taPrev" ${S.tradeAlertIndex === 0 ? "disabled" : ""}>&lsaquo; Previous</button>
+      ${isLast ? `<button class="btn btn--primary" id="taContinue">Continue</button>` : `<button class="btn" id="taNext">Next &rsaquo;</button>`}
+    </div>`;
+  const prev = document.getElementById("taPrev");
+  if (prev) prev.addEventListener("click", () => { S.tradeAlertIndex = Math.max(0, S.tradeAlertIndex - 1); renderTradeAlertModal(); });
+  const next = document.getElementById("taNext");
+  if (next) next.addEventListener("click", () => { S.tradeAlertIndex++; renderTradeAlertModal(); });
+  const cont = document.getElementById("taContinue");
+  if (cont) cont.addEventListener("click", dismissTradeAlerts);
+}
+
+function dismissTradeAlerts() {
+  document.getElementById("tradeAlertBackdrop").classList.remove("is-open");
+  const cb = S.tradeAlertOnDone;
+  S.tradeAlertQueue = []; S.tradeAlertIndex = 0; S.tradeAlertOnDone = null;
+  save();
+  renderAll();
+  if (cb) cb();
+}
+
+/* ---------------- box score modal ---------------- */
+function openBoxScore(game) {
+  const card = document.getElementById("boxScoreCard");
+  const rowsFor = (abbr) => {
+    const entries = Object.entries(game.box || {}).filter(([, v]) => v.team === abbr).map(([id, v]) => ({ id: Number(id), ...v }));
+    entries.sort((a, b) => b.pts - a.pts);
+    return entries.map((p) => `<tr><td class="name-cell">${esc(p.name)}</td><td><span class="pill pill--pos">${p.pos}</span></td><td class="num">${p.pts}</td><td class="num">${p.reb}</td><td class="num">${p.ast}</td></tr>`).join("");
+  };
+  card.innerHTML = `
+    <div class="panel-title">${esc(teamLabel(game.home))} ${game.hs} &ndash; ${game.as} ${esc(teamLabel(game.away))}</div>
+    <div class="panel-sub">Day ${game.day} box score</div>
+    <div class="box-teams">
+      <div><div class="label" style="margin:10px 0 6px;">${game.home}</div><div class="table-wrap"><table class="stat-table"><thead><tr><th class="name-cell">Player</th><th>Pos</th><th>Pts</th><th>Reb</th><th>Ast</th></tr></thead><tbody>${rowsFor(game.home)}</tbody></table></div></div>
+      <div><div class="label" style="margin:10px 0 6px;">${game.away}</div><div class="table-wrap"><table class="stat-table"><thead><tr><th class="name-cell">Player</th><th>Pos</th><th>Pts</th><th>Reb</th><th>Ast</th></tr></thead><tbody>${rowsFor(game.away)}</tbody></table></div></div>
+    </div>
+    <div style="margin-top:16px;"><button class="btn" id="boxCloseBtn">Close</button></div>`;
+  document.getElementById("boxCloseBtn").addEventListener("click", closeBoxScore);
+  document.getElementById("boxScoreBackdrop").classList.add("is-open");
+}
+function closeBoxScore() { document.getElementById("boxScoreBackdrop").classList.remove("is-open"); }
+
+/* ---------------- regular season sim ---------------- */
+function maybeFireTradeWindow(daysSimulated) {
+  if (!daysSimulated.length) return;
+  const maxDay = Math.max(...daysSimulated);
+  const fire = (key, n) => {
+    if (S.tradeWindows[key] || maxDay < n) return;
+    S.tradeWindows[key] = true;
+    const trades = E.runCpuTradeRound(S.league, 3);
+    trades.forEach((tr) => log(`${teamLabel(tr.teamA)} trade ${tr.aGives.name} to ${teamLabel(tr.teamB)} for ${tr.bGives.name}.`, "TRADE"));
+    if (trades.length) showTradeAlerts(trades);
+  };
+  fire("w1", 20);
+  fire("w2", 55);
+}
+
+function doSim(n) {
+  const daysBefore = new Set(S.league.schedule.filter((g) => g.played).map((g) => g.day));
+  const results = n === Infinity ? E.simulateRestOfSeason(S.league) : E.simulateDays(S.league, n);
+  const daysAfter = [...new Set(S.league.schedule.filter((g) => g.played).map((g) => g.day))].filter((d) => !daysBefore.has(d));
+  const myGames = S.myTeam ? results.filter((r) => r.home === S.myTeam || r.away === S.myTeam) : [];
+  myGames.forEach((r) => {
+    const won = r.winner === S.myTeam;
+    const opp = r.home === S.myTeam ? r.away : r.home;
+    log(`${won ? "W" : "L"} vs ${opp}: ${r.homeScore}-${r.awayScore}`, `GAME`);
+  });
+  if (!myGames.length && results.length) log(`Simulated ${results.length} league game${results.length === 1 ? "" : "s"}.`, "SIM");
+  S.lastResults = results.slice(-30);
+  maybeFireTradeWindow(daysAfter);
+  save();
+  renderAll();
+}
+
+/* ---------------- awards -> playoffs -> offseason flow ---------------- */
+function revealAwards() {
+  S.awards = E.computeAwards(S.league);
+  S.phase = "awards";
+  switchTab("awards");
+}
+
+function enterPlayoffs() {
+  const result = E.runPlayoffs(S.league);
+  S.playoffResult = result;
+  S.playoffRevealStage = "playin";
+  S.history.push({ year: S.league.year, champion: result.champion.abbr });
+  const loserAbbr = result.finals.winner === result.finals.high ? result.finals.low : result.finals.high;
+  log(`${E.teamName(result.champion)} win the ${S.league.year} Championship, defeating ${E.teamName(S.league.teams[loserAbbr])} ${result.finals.wins[result.finals.winner]}-${result.finals.wins[loserAbbr]}.`, "TITLE");
+  S.phase = "playoffs";
+  save();
+  switchTab("playoffs");
+}
+
+function continueToBracket() { S.playoffRevealStage = "bracket"; save(); renderAll(); }
+
+function enterOffseason() {
+  const reveal = E.runDraftLottery(S.league);
+  S.lotteryReveal = reveal;
+  S.phase = "lottery";
+  log(`${E.teamName(reveal.winner)} win the ${S.league.year + 1} draft lottery.`, "LOTTERY");
+  save();
+  switchTab("draft");
+}
+
+function continueToDraft() {
+  const picks = E.orderedPicks(S.league, S.league.year);
+  S.draft = { picks, idx: 0, available: S.league.draftClass.slice(), results: [] };
+  S.phase = "draft";
+  save();
+  draftAdvance();
+}
+
+function draftAdvance() {
+  const d = S.draft;
+  while (d.idx < d.picks.length) {
+    const dp = d.picks[d.idx];
+    const team = S.league.teams[dp.ownerTeam];
+    if (!d.available.length) break;
+    if (team.user) { save(); renderAll(); return; }
+    resolvePick(team, dp, E.cpuSelectIndex(team, d.available));
+  }
+  finishDraft();
+}
+
+function resolvePick(team, dp, idx) {
+  const d = S.draft;
+  idx = E.clamp(idx, 0, d.available.length - 1);
+  const player = d.available.splice(idx, 1)[0];
+  player.team = team.abbr; player.exp = 0; player.salary = E.rookieScaleSalary(d.idx + 1);
+  team.roster.push(player);
+  d.results.push({ pick: d.idx + 1, round: dp.round, team: team.abbr, player });
+  team.picks = team.picks.filter((p) => p !== dp);
+  log(`Pick ${d.idx + 1} (Rd ${dp.round}): ${team.abbr} select ${player.name} — ${player.pos}, ${player.ovr} OVR / ${player.pot} POT`, "DRAFT");
+  d.idx++;
+}
+
+function userDraftPick(playerId) {
+  const d = S.draft;
+  const dp = d.picks[d.idx];
+  const team = S.league.teams[dp.ownerTeam];
+  const idx = d.available.findIndex((p) => p.id === playerId);
+  if (idx === -1) return;
+  resolvePick(team, dp, idx);
+  save();
+  draftAdvance();
+}
+
+function finishDraft() {
+  S.league.draftClass = S.draft.available;
+  const fa = E.startFreeAgency(S.league);
+  fa.cpuLog.forEach((entry) => log(`${teamLabel(entry.team)} re-sign ${entry.player.name} (${entry.offer.years}yr / ${fmtSalary(entry.offer.salary)}).`, "RESIGN"));
+  S.freeAgency = { pool: fa.pool };
+  S.draft = null;
+  S.lotteryReveal = null;
+  S.league.lotteryOrder = null;
+  S.league.lotteryReveal = null;
+  S.phase = "freeagency";
+  save();
+  switchTab("freeagency");
+}
+
+function faReSign(playerId) {
+  const p = S.freeAgency.pool.find((x) => x.id === playerId);
+  if (!p || !S.myTeam) return;
+  const offer = E.suggestContract(p);
+  E.resignPlayer(S.league, S.myTeam, p, S.freeAgency.pool, offer);
+  log(`You re-sign ${p.name} (${offer.years}yr / ${fmtSalary(offer.salary)}).`, "RESIGN");
+  save();
+  renderAll();
+}
+
+function faSign(playerId) {
+  const p = S.freeAgency.pool.find((x) => x.id === playerId);
+  if (!p || !S.myTeam) return;
+  const offer = E.suggestContract(p);
+  const team = S.league.teams[S.myTeam];
+  const result = E.signFreeAgent(S.league, S.myTeam, p, S.freeAgency.pool, offer);
+  if (!result) {
+    log(`Signing ${p.name} fell through — you're too far over the cap or your roster's full.`, "FA");
+  } else {
+    log(`You sign ${p.name} (${offer.years}yr / ${fmtSalary(offer.salary)}).`, "FA");
+  }
+  save();
+  renderAll();
+}
+
+function finishFreeAgencyAndAdvance() {
+  const bidLog = E.runFreeAgencyBiddingPass(S.league, S.freeAgency.pool, { excludeUser: true });
+  bidLog.forEach((entry) => log(`${teamLabel(entry.team)} sign ${entry.player.name} (${entry.offer.years}yr / ${fmtSalary(entry.offer.salary)}).`, "FA"));
+  const released = E.trimRosters(S.league);
+  Object.entries(released).forEach(([abbr, players]) => players.forEach((p) => log(`${teamLabel(abbr)} release ${p.name}.`, "CUT")));
+  const retired = E.ageAndDevelop(S.league);
+  retired.forEach((p) => log(`${p.name} announces retirement.`, "RETIRE"));
+  E.addFuturePicks(S.league, S.league.year + 3);
+  const trades = E.runCpuTradeRound(S.league, 6);
+  trades.forEach((tr) => log(`${teamLabel(tr.teamA)} trade ${tr.aGives.name} to ${teamLabel(tr.teamB)} for ${tr.bGives.name}.`, "TRADE"));
+
+  S.freeAgency = null;
+  S.playoffResult = null;
+  S.playoffRevealStage = null;
+  S.awards = null;
+  S.tradeWindows = { w1: false, w2: false };
+  S.league.year += 1;
+  S.league.schedule = E.generateSchedule(Object.keys(S.league.teams), 82);
+  S.league.draftClass = E.generateDraftClass(S.league.year, 60);
+  S.league.phase = "regular";
+  S.phase = "regular";
+  save();
+
+  showTradeAlerts(trades, () => { S.tab = "standings"; window.scrollTo(0, 0); save(); renderAll(); });
+  if (!trades.length) { S.tab = "standings"; window.scrollTo(0, 0); save(); renderAll(); }
+}
+
+/* ---------------- render: standings ---------------- */
+function standingsTableHTML(teams) {
+  const leader = teams[0];
+  const rows = teams.map((t, i) => {
+    const seed = i + 1;
+    const isMe = t.abbr === S.myTeam;
+    const cut = seed === 6 || seed === 10;
+    return `<tr class="${cut ? "playoff-cut" : ""} ${isMe ? "is-me" : ""}">
+      <td class="num">${seed}</td>
+      <td class="name-cell">${esc(E.teamName(t))} <span class="muted">${t.division}</span></td>
+      <td class="num">${t.wins}</td>
+      <td class="num">${t.losses}</td>
+      <td class="num">${fmtPct(E.winPct(t))}</td>
+      <td class="num">${seed === 1 ? "—" : E.gamesBehind(leader, t).toFixed(1)}</td>
+      <td>${seed <= 6 ? '<span class="pill pill--win">In</span>' : seed <= 10 ? '<span class="pill pill--seed">Play-In</span>' : '<span class="pill pill--loss">Out</span>'}</td>
+    </tr>`;
+  }).join("");
+  return `<thead><tr><th>#</th><th class="name-cell">Team</th><th>W</th><th>L</th><th>PCT</th><th>GB</th><th>Status</th></tr></thead><tbody>${rows}</tbody>`;
+}
+
+function renderStandings() {
+  document.getElementById("standingsEast").innerHTML = standingsTableHTML(E.standings(S.league, "East"));
+  document.getElementById("standingsWest").innerHTML = standingsTableHTML(E.standings(S.league, "West"));
+
+  const results = S.lastResults || [];
+  const tickerEl = document.getElementById("ticker");
+  const sub = document.getElementById("tickerSub");
+  if (!results.length) {
+    tickerEl.innerHTML = "";
+    sub.textContent = "No games played yet — sim a day to get started.";
+  } else {
+    sub.textContent = `Last ${results.length} game${results.length === 1 ? "" : "s"} simulated. Click a card for the box score.`;
+    tickerEl.innerHTML = results.slice(-12).reverse().map((r, i) => `
+      <div class="score-card" data-day="${r._day || ""}" data-idx="${results.length - 1 - i}">
+        <div class="day">FINAL</div>
+        <div class="row ${r.winner === r.home ? "win" : "lose"}"><span>${r.home}</span><span>${r.homeScore}</span></div>
+        <div class="row ${r.winner === r.away ? "win" : "lose"}"><span>${r.away}</span><span>${r.awayScore}</span></div>
+      </div>`).join("");
+    tickerEl.querySelectorAll(".score-card").forEach((card, i) => {
+      card.addEventListener("click", () => {
+        const r = results.slice(-12).reverse()[i];
+        const game = S.league.schedule.find((g) => g.played && g.home === r.home && g.away === r.away && g.hs === r.homeScore && g.as === r.awayScore);
+        if (game) openBoxScore(game);
+      });
+    });
+  }
+
+  const hist = document.getElementById("historyList");
+  hist.innerHTML = !S.history.length ? `<div class="empty-state">No champion crowned yet.</div>` : `<div class="table-wrap"><table class="stat-table">
+      <thead><tr><th>Season</th><th class="name-cell">Champion</th></tr></thead>
+      <tbody>${S.history.slice().reverse().map((h) => `<tr><td class="num">${h.year}</td><td class="name-cell">${esc(teamLabel(h.champion))}</td></tr>`).join("")}</tbody>
+    </table></div>`;
+}
+
+/* ---------------- render: roster ---------------- */
+function populateTeamSelect(sel, selected) {
+  const teams = Object.values(S.league.teams).sort((a, b) => E.teamName(a).localeCompare(E.teamName(b)));
+  sel.innerHTML = teams.map((t) => `<option value="${t.abbr}" ${t.abbr === selected ? "selected" : ""}>${esc(E.teamName(t))}</option>`).join("");
+}
+
+let rosterSelected = null;
+function renderRoster() {
+  const sel = document.getElementById("rosterTeamSelect");
+  if (!rosterSelected) rosterSelected = S.myTeam || Object.keys(S.league.teams)[0];
+  populateTeamSelect(sel, rosterSelected);
+  sel.onchange = () => { rosterSelected = sel.value; renderRoster(); };
+
+  const t = S.league.teams[rosterSelected];
+  document.getElementById("rosterTeamTitle").textContent = E.teamName(t);
+  document.getElementById("rosterTeamSub").textContent = `${t.conference} · ${t.division} — ${t.wins}-${t.losses}${t.abbr === S.myTeam ? " · Your team" : ""}`;
+
+  const cap = E.SALARY_CAP, tax = E.TAX_LINE, ap1 = E.APRON1, ap2 = E.APRON2;
+  const pay = E.payroll(t);
+  const tier = E.capTier(pay);
+  document.getElementById("rosterSummary").innerHTML = `
+    <div class="stat-card ${tier === "apron1" || tier === "apron2" ? "gold" : ""}">
+      <div class="v">${fmtSalary(pay)}</div><div class="k">Payroll &middot; ${tier.toUpperCase()}</div>
+    </div>
+    <div class="stat-card"><div class="v">${t.roster.length}</div><div class="k">Roster Size &middot; Max ${E.ROSTER_MAX}</div></div>
+    <div class="stat-card"><div class="v">${t.picks.filter((p) => p.round === 1).length}</div><div class="k">1st Round Picks Owned</div></div>
+    <div class="stat-card"><div class="v">${t.picks.filter((p) => p.round === 2).length}</div><div class="k">2nd Round Picks Owned</div></div>`;
+
+  const rows = t.roster.slice().sort((a, b) => b.ovr - a.ovr).map((p) => `
+    <tr>
+      <td><span class="pill pill--pos">${p.pos}</span></td>
+      <td class="name-cell">${esc(p.name)}</td>
+      <td class="num">${p.age}</td>
+      <td class="num">${p.ovr}</td>
+      <td class="num muted">${p.pot}</td>
+      <td class="num">${p.stats.gp ? (p.stats.pts / p.stats.gp).toFixed(1) : "—"}</td>
+      <td class="num">${p.stats.gp ? (p.stats.reb / p.stats.gp).toFixed(1) : "—"}</td>
+      <td class="num">${p.stats.gp ? (p.stats.ast / p.stats.gp).toFixed(1) : "—"}</td>
+      <td class="num">${fmtSalary(p.salary)}</td>
+      <td class="num">${p.contractYears}yr</td>
+    </tr>`).join("");
+  document.getElementById("rosterTable").innerHTML = `
+    <thead><tr><th>Pos</th><th class="name-cell">Name</th><th>Age</th><th>Ovr</th><th>Pot</th><th>Pts</th><th>Reb</th><th>Ast</th><th>Salary</th><th>Yrs Left</th></tr></thead>
+    <tbody>${rows}</tbody>`;
+}
+
+/* ---------------- render: schedule ---------------- */
+let scheduleSelected = null;
+function renderSchedule() {
+  const sel = document.getElementById("scheduleTeamSelect");
+  if (!scheduleSelected) scheduleSelected = S.myTeam || Object.keys(S.league.teams)[0];
+  populateTeamSelect(sel, scheduleSelected);
+  sel.onchange = () => { scheduleSelected = sel.value; renderSchedule(); };
+
+  const games = S.league.schedule.filter((g) => g.home === scheduleSelected || g.away === scheduleSelected).sort((a, b) => a.day - b.day);
+  const played = games.filter((g) => g.played).length;
+  const record = games.reduce((acc, g) => {
+    if (!g.played) return acc;
+    const isHome = g.home === scheduleSelected;
+    const my = isHome ? g.hs : g.as, their = isHome ? g.as : g.hs;
+    if (my > their) acc.w++; else acc.l++;
+    return acc;
+  }, { w: 0, l: 0 });
+  document.getElementById("scheduleSub").textContent = `${played} / ${games.length} played · ${record.w}-${record.l}`;
+  const rows = games.map((g) => {
+    const isHome = g.home === scheduleSelected;
+    const opp = isHome ? g.away : g.home;
+    let result = "—";
+    if (g.played) {
+      const my = isHome ? g.hs : g.as, their = isHome ? g.as : g.hs;
+      result = `${my > their ? "W" : "L"} ${my}-${their}`;
+    }
+    return `<tr class="${g.played ? "clickable" : ""}" data-day="${g.day}"><td class="num">${g.day}</td><td>${isHome ? "vs" : "@"}</td><td class="name-cell">${esc(teamLabel(opp))}</td><td class="num">${result}</td></tr>`;
+  }).join("");
+  const tbl = document.getElementById("scheduleTable");
+  tbl.innerHTML = `<thead><tr><th>Day</th><th></th><th class="name-cell">Opponent</th><th>Result</th></tr></thead><tbody>${rows}</tbody>`;
+  tbl.querySelectorAll("tr.clickable").forEach((row) => {
+    row.addEventListener("click", () => {
+      const day = Number(row.dataset.day);
+      const game = games.find((g) => g.day === day);
+      if (game) openBoxScore(game);
+    });
+  });
+}
+
+/* ---------------- render: playoffs (play-in + bracket) ---------------- */
+function seriesCard(s) {
+  if (!s) return `<div class="series-card"><div class="tbd">TBD</div></div>`;
+  const highT = S.league.teams[s.high], lowT = S.league.teams[s.low];
+  const highWin = s.winner === s.high;
+  return `<div class="series-card">
+    <div class="srow ${highWin ? "winner" : "loser"}"><span>${s.highSeed ? "#" + s.highSeed + " " : ""}${highT.abbr}</span><span class="score">${s.wins[s.high]}</span></div>
+    <div class="srow ${!highWin ? "winner" : "loser"}"><span>${s.lowSeed ? "#" + s.lowSeed + " " : ""}${lowT.abbr}</span><span class="score">${s.wins[s.low]}</span></div>
+  </div>`;
+}
+
+function playInGameHTML(label, g) {
+  return `<div class="playin-game">
+    <div class="pg-label">${label}</div>
+    <div class="srow ${g.winner.abbr === g.result.home ? "winner" : "loser"}"><span>${g.result.home}</span><span class="num">${g.result.homeScore}</span></div>
+    <div class="srow ${g.winner.abbr === g.result.away ? "winner" : "loser"}"><span>${g.result.away}</span><span class="num">${g.result.awayScore}</span></div>
+  </div>`;
+}
+
+function playInConferenceHTML(conf, pi) {
+  return `
+    <div class="label" style="margin-bottom:8px;">${conf}ern Conference</div>
+    <div class="playin-flow">
+      <div>
+        ${playInGameHTML("7 vs 8 Game", pi.game78)}
+        <div class="playin-arrow">&darr;</div>
+        ${playInGameHTML("9 vs 10 Game", pi.game910)}
+      </div>
+      <div class="playin-arrow">Loser of 7/8 hosts winner of 9/10 &rarr;</div>
+      <div>
+        ${playInGameHTML("Final Play-In Game", pi.game8seed)}
+        <div style="height:10px;"></div>
+        <div class="locked-seed"><div class="label" style="margin-bottom:6px;">Locked Seeds</div>
+          <div class="srow"><span>#7</span><span>${pi.finalSeed7.abbr}</span></div>
+          <div class="srow"><span>#8</span><span>${pi.finalSeed8.abbr}</span></div>
+        </div>
+      </div>
+    </div>`;
+}
+
+function renderPlayoffs() {
+  const panel = document.getElementById("playoffsPanel");
+  if (!S.playoffResult) {
+    const complete = E.isRegularSeasonComplete(S.league);
+    const remaining = E.remainingDays(S.league).length;
+    let msg;
+    if (!complete) msg = `${remaining} day${remaining === 1 ? "" : "s"} left in the regular season. The postseason unlocks once every team has played 82 games.`;
+    else if (S.phase === "regular") msg = `Regular season complete — hit <strong>Reveal Awards</strong> up top, then enter the postseason from there.`;
+    else msg = `Check the Awards tab to continue into the postseason.`;
+    panel.innerHTML = `<div class="panel-head"><div class="panel-title">Postseason</div></div><div class="empty-state">${msg}</div>`;
+    return;
+  }
+  const r = S.playoffResult;
+  if (S.playoffRevealStage === "playin") {
+    panel.innerHTML = `
+      <div class="panel-head"><div class="panel-title">Play-In Tournament</div><div class="panel-sub">Seeds 7-10 settle the final 7 &amp; 8 seeds in each conference</div></div>
+      <div class="grid-2">
+        <div>${playInConferenceHTML("East", r.eastPlayIn)}</div>
+        <div>${playInConferenceHTML("West", r.westPlayIn)}</div>
+      </div>
+      <div style="margin-top:18px;"><button class="btn btn--primary" id="toBracketBtn">Continue to Bracket &rarr;</button></div>`;
+    document.getElementById("toBracketBtn").addEventListener("click", continueToBracket);
+    return;
+  }
+  panel.innerHTML = `
+    <div class="panel-head"><div class="panel-title">Playoff Bracket — ${S.league.year}</div><div class="panel-sub" id="postseasonNote"></div></div>
+    <div class="champion-banner" style="margin-bottom:18px;">
+      <div class="brand-mark" style="width:44px;height:44px;font-size:16px;background:var(--gold);color:#241a02;">${r.champion.abbr}</div>
+      <div><div class="cb-title">${esc(E.teamName(r.champion))}</div><div class="muted">NBA Champions — defeated ${esc(E.teamName(r.finals.winner === r.finals.high ? S.league.teams[r.finals.low] : S.league.teams[r.finals.high]))} ${r.finals.wins[r.finals.winner]}-${r.finals.wins[r.finals.winner === r.finals.high ? r.finals.low : r.finals.high]} in the Finals</div></div>
+    </div>
+    <div class="bracket">
+      <div class="bracket-col"><div class="label col-label">East Rd 1</div>${r.east.round1.map(seriesCard).join("")}</div>
+      <div class="bracket-col"><div class="label col-label">East Rd 2 / Conf Finals</div>${[...r.east.round2, r.east.confFinals].map(seriesCard).join("")}</div>
+      <div class="bracket-col"><div class="label col-label">Finals</div>${seriesCard(r.finals)}</div>
+      <div class="bracket-col"><div class="label col-label">West Rd 2 / Conf Finals</div>${[...r.west.round2, r.west.confFinals].map(seriesCard).join("")}</div>
+      <div class="bracket-col"><div class="label col-label">West Rd 1</div>${r.west.round1.map(seriesCard).join("")}</div>
+    </div>
+    <div style="margin-top:18px;"><button class="btn btn--gold" id="toOffseasonBtn">Enter Offseason &rarr;</button></div>`;
+  document.getElementById("toOffseasonBtn").addEventListener("click", enterOffseason);
+}
+
+/* ---------------- render: awards ---------------- */
+function awardColumnHTML(title, finalists) {
+  if (!finalists.length) return `<div class="award-col"><div class="award-head"><div class="a-label">${title}</div><div class="a-name">—</div></div><div class="award-row muted">No qualified players yet.</div></div>`;
+  const winner = finalists[0];
+  return `<div class="award-col">
+    <div class="award-head"><div class="a-label">${title.split(" — ")[0]}</div><div class="a-name">${title.split(" — ")[1]}</div></div>
+    ${finalists.map((f, i) => `
+      <div class="award-row ${i === 0 ? "winner" : ""}">
+        <div class="ar-name">${i === 0 ? "\u{1F3C6} " : ""}${esc(f.p.name)}</div>
+        <div class="ar-meta">${esc(teamLabel(f.team.abbr))} · ${f.p.pos} · ${f.p.ovr} OVR</div>
+        <div class="ar-line">${f.line.ppg.toFixed(1)} PPG · ${f.line.rpg.toFixed(1)} RPG · ${f.line.apg.toFixed(1)} APG</div>
+      </div>`).join("")}
+  </div>`;
+}
+
+function renderAwards() {
+  const panel = document.getElementById("awardsPanel");
+  if (!S.awards) {
+    panel.innerHTML = `<div class="panel-head"><div class="panel-title">End of Season Honors</div></div><div class="empty-state">Awards are revealed once the regular season wraps — use <strong>Reveal Awards</strong> up top.</div>`;
+    return;
+  }
+  const a = S.awards;
+  panel.innerHTML = `
+    <div class="panel-head"><div class="panel-title">${S.league.year} Regular Season Awards</div><div class="panel-sub">The league's best, recognized before the playoffs tip off</div></div>
+    <div class="grid-4">
+      ${awardColumnHTML("MVP — Most Valuable Player", a.mvp)}
+      ${awardColumnHTML("DPOY — Defensive Player of the Year", a.dpoy)}
+      ${awardColumnHTML("6MOY — Sixth Man of the Year", a.smoy)}
+      ${awardColumnHTML("ROY — Rookie of the Year", a.roy)}
+    </div>
+    <div style="margin-top:20px;"><button class="btn btn--primary" id="toPlayoffsBtn">Enter Playoffs &rarr;</button></div>`;
+  document.getElementById("toPlayoffsBtn").addEventListener("click", enterPlayoffs);
+}
+
+/* ---------------- render: draft (lottery + board) ---------------- */
+function renderDraft() {
+  const panel = document.getElementById("draftPanel");
+
+  if (S.phase === "lottery" && S.lotteryReveal) {
+    const rv = S.lotteryReveal;
+    const rows = rv.rows.map((row) => {
+      const moveHtml = row.move > 0 ? `<span class="pill pill--move-up">▲ ${row.move}</span>` : row.move < 0 ? `<span class="pill pill--move-down">▼ ${-row.move}</span>` : `<span class="muted">—</span>`;
+      return `<tr class="${row.pick <= 4 ? "is-me" : ""}"><td class="num">${row.pick}</td><td class="name-cell">${esc(teamLabel(row.team.abbr))}</td><td class="num">${row.oddsPct.toFixed(1)}%</td><td>${moveHtml}</td></tr>`;
+    }).join("");
+    panel.innerHTML = `
+      <div class="panel-head"><div class="panel-title">${S.league.year + 1} Draft Lottery</div></div>
+      <div class="champion-banner" style="margin-bottom:16px;"><div class="brand-mark" style="width:38px;height:38px;font-size:13px;background:var(--gold);color:#241a02;">\u{1F3C0}</div><div><strong style="color:var(--gold);">${esc(teamLabel(rv.winner.abbr))}</strong> win the #1 overall pick.</div></div>
+      <div class="panel-sub" style="margin-bottom:10px;">Top 4 picks are lottery-drawn; picks 5-14 fall in reverse-standings order. Each team's odds are tied to its original slot.</div>
+      <div class="table-wrap"><table class="stat-table"><thead><tr><th>Pick</th><th class="name-cell">Owner</th><th>#1 Odds</th><th>Move</th></tr></thead><tbody>${rows}</tbody></table></div>
+      <div style="margin-top:18px;"><button class="btn btn--primary" id="toDraftBtn">Continue to Draft &rarr;</button></div>`;
+    document.getElementById("toDraftBtn").addEventListener("click", continueToDraft);
+    return;
+  }
+
+  if (!S.draft) {
+    const board = S.league.draftClass.slice().sort((a, b) => b.pot - a.pot).slice(0, 20);
+    panel.innerHTML = `
+      <div class="panel-head"><div class="panel-title">Scouting Board</div><div class="panel-sub">Top ${board.length} prospects for the ${S.league.year} draft class</div></div>
+      <div class="table-wrap"><table class="stat-table">
+        <thead><tr><th>Pos</th><th class="name-cell">Prospect</th><th>Age</th><th>Ovr</th><th>Pot</th></tr></thead>
+        <tbody>${board.map((p) => `<tr><td><span class="pill pill--pos">${p.pos}</span></td><td class="name-cell">${esc(p.name)}</td><td class="num">${p.age}</td><td class="num">${p.ovr}</td><td class="num">${p.pot}</td></tr>`).join("")}</tbody>
+      </table></div>
+      <p class="muted" style="margin-top:12px;font-size:12.5px;">The lottery and draft run once the postseason wraps up.</p>`;
+    return;
+  }
+
+  const d = S.draft;
+  const onClock = d.idx < d.picks.length ? d.picks[d.idx] : null;
+  const onClockTeam = onClock ? S.league.teams[onClock.ownerTeam] : null;
+  const isUserTurn = onClockTeam && onClockTeam.user;
+  const boardRows = d.results.slice().reverse().slice(0, 30).map((r) => `
+    <tr><td class="num">${r.pick}</td><td class="num">${r.round}</td><td class="name-cell">${esc(teamLabel(r.team))}</td><td class="name-cell">${esc(r.player.name)}</td><td><span class="pill pill--pos">${r.player.pos}</span></td><td class="num">${r.player.ovr}</td><td class="num">${r.player.pot}</td></tr>`).join("");
+
+  let clockHtml;
+  if (!onClock) {
+    clockHtml = `<div class="empty-state">Draft complete — moving on to free agency.</div>`;
+  } else if (isUserTurn) {
+    const prospects = d.available.slice().sort((a, b) => b.pot - a.pot);
+    clockHtml = `
+      <div class="panel-sub" style="margin-bottom:8px;">On the clock: <strong>${esc(teamLabel(onClockTeam.abbr))}</strong> (yours) — Pick ${d.idx + 1}, Round ${onClock.round}</div>
+      <div class="table-wrap"><table class="stat-table">
+        <thead><tr><th></th><th>Pos</th><th class="name-cell">Prospect</th><th>Age</th><th>Ovr</th><th>Pot</th></tr></thead>
+        <tbody>${prospects.map((p) => `<tr><td><button class="btn btn--sm btn--primary" data-pick="${p.id}">Draft</button></td><td><span class="pill pill--pos">${p.pos}</span></td><td class="name-cell">${esc(p.name)}</td><td class="num">${p.age}</td><td class="num">${p.ovr}</td><td class="num">${p.pot}</td></tr>`).join("")}</tbody>
+      </table></div>`;
+  } else {
+    clockHtml = `<div class="panel-sub">On the clock: <strong>${esc(teamLabel(onClockTeam.abbr))}</strong> — Pick ${d.idx + 1}, Round ${onClock.round}. <button class="btn btn--sm" id="advanceDraftBtn">Advance Draft</button></div>`;
+  }
+
+  panel.innerHTML = `
+    <div class="panel-head"><div class="panel-title">${S.league.year} Draft</div><div class="panel-sub">${d.results.length} / ${d.picks.length} picks made</div></div>
+    ${clockHtml}
+    <div class="table-wrap" style="margin-top:16px;"><table class="stat-table">
+      <thead><tr><th>#</th><th>Rd</th><th class="name-cell">Team</th><th class="name-cell">Player</th><th>Pos</th><th>Ovr</th><th>Pot</th></tr></thead>
+      <tbody>${boardRows || `<tr><td colspan="7" class="empty-state">No picks made yet.</td></tr>`}</tbody>
+    </table></div>`;
+  panel.querySelectorAll("[data-pick]").forEach((btn) => btn.addEventListener("click", () => userDraftPick(Number(btn.dataset.pick))));
+  const adv = document.getElementById("advanceDraftBtn");
+  if (adv) adv.addEventListener("click", draftAdvance);
+}
+
+/* ---------------- render: free agency ---------------- */
+function capBarHTML(team) {
+  const pay = E.payroll(team);
+  const scaleMax = E.APRON2 * 1.15;
+  const pct = (v) => Math.min(100, (v / scaleMax) * 100);
+  return `
+    <div class="meter"><span style="width:${pct(pay)}%;"></span></div>
+    <div class="meter-ticks">
+      <span style="left:0%;">$0</span>
+      <span style="left:${pct(E.SALARY_CAP)}%;">CAP ${fmtSalary(E.SALARY_CAP)}</span>
+      <span style="left:${pct(E.TAX_LINE)}%;">TAX ${fmtSalary(E.TAX_LINE)}</span>
+      <span style="left:${pct(E.APRON2)}%;">2ND APRON ${fmtSalary(E.APRON2)}</span>
+    </div>`;
+}
+
+function renderFreeAgency() {
+  const panel = document.getElementById("faPanel");
+  if (!S.freeAgency) {
+    panel.innerHTML = `<div class="panel-head"><div class="panel-title">Free Agency</div></div><div class="empty-state">Free agency opens right after the draft.</div>`;
+    return;
+  }
+  if (!S.myTeam) {
+    const trades2 = null;
+    panel.innerHTML = `
+      <div class="panel-head"><div class="panel-title">Free Agency</div><div class="panel-sub">${S.freeAgency.pool.length} players still on the open market</div></div>
+      <div class="empty-state">You're spectating, so every team (including free agency) runs itself. Hit continue to sim the rest of the market and roll into next season.</div>
+      <div style="margin-top:16px;"><button class="btn btn--primary" id="faContinueBtn">Simulate Rest of Free Agency &rarr;</button></div>`;
+    document.getElementById("faContinueBtn").addEventListener("click", finishFreeAgencyAndAdvance);
+    return;
+  }
+
+  const team = S.league.teams[S.myTeam];
+  const pay = E.payroll(team);
+  const tier = E.capTier(pay);
+  const own = S.freeAgency.pool.filter((p) => p._formerTeam === S.myTeam);
+  const market = S.freeAgency.pool.filter((p) => p._formerTeam !== S.myTeam).sort((a, b) => E.playerValue(b) - E.playerValue(a)).slice(0, 40);
+
+  const ownRows = own.length ? own.map((p) => {
+    const offer = E.suggestContract(p);
+    const willing = E.reSignWillingness(p, team);
+    return `<div class="fa-row">
+      <div class="fa-name">${esc(p.name)} <span class="pill pill--pos">${p.pos}</span></div>
+      <div class="fa-meta">${p.ovr} OVR &middot; Age ${p.age} &middot; Suggested ${offer.years}yr / ${fmtSalary(offer.salary)}</div>
+      <div class="fa-willing muted">Open to re-sign: ${willing}/100</div>
+      <div style="flex:1;"></div>
+      <button class="btn btn--sm btn--primary" data-resign="${p.id}">Re-Sign</button>
+    </div>`;
+  }).join("") : `<div class="empty-state">None of your players are hitting free agency this summer.</div>`;
+
+  const marketRows = market.map((p) => {
+    const offer = E.suggestContract(p);
+    const legal = E.canSignOutside(team, offer.salary) && team.roster.length < E.ROSTER_MAX;
+    return `<div class="fa-row">
+      <div class="fa-name">${esc(p.name)} <span class="pill pill--pos">${p.pos}</span></div>
+      <div class="fa-meta">${p.ovr} OVR &middot; Age ${p.age} &middot; Suggested ${offer.years}yr / ${fmtSalary(offer.salary)}</div>
+      <div style="flex:1;"></div>
+      <button class="btn btn--sm ${legal ? "btn--primary" : ""}" data-sign="${p.id}" ${legal ? "" : "disabled"} title="${legal ? "" : "Cap tier won't allow this signing"}">Sign</button>
+    </div>`;
+  }).join("");
+
+  panel.innerHTML = `
+    <div class="panel-head"><div><div class="panel-title">Free Agency</div><div class="panel-sub">${esc(E.teamName(team))} &middot; ${S.freeAgency.pool.length} players on the market</div></div></div>
+    <div class="grid-4" style="margin-bottom:14px;">
+      <div class="stat-card ${tier === "apron1" || tier === "apron2" ? "gold" : ""}"><div class="v">${fmtSalary(pay)}</div><div class="k">Payroll</div></div>
+      <div class="stat-card"><div class="v">${tier.toUpperCase()}</div><div class="k">Cap Tier</div></div>
+      <div class="stat-card"><div class="v">${own.length}</div><div class="k">Your Expiring Contracts</div></div>
+      <div class="stat-card"><div class="v">${team.roster.length}/${E.ROSTER_MAX}</div><div class="k">Roster Size</div></div>
+    </div>
+    <div class="label" style="margin-bottom:8px;">Spending Room</div>
+    ${capBarHTML(team)}
+    <div class="label" style="margin:20px 0 10px;">Your Expiring Contracts</div>
+    ${ownRows}
+    <div class="label" style="margin:20px 0 10px;">Open Market</div>
+    <div class="asset-list" style="max-height:420px;">${marketRows}</div>
+    <div style="margin-top:20px;"><button class="btn btn--primary" id="faContinueBtn">Simulate Rest of Free Agency &rarr;</button></div>`;
+
+  panel.querySelectorAll("[data-resign]").forEach((b) => b.addEventListener("click", () => faReSign(Number(b.dataset.resign))));
+  panel.querySelectorAll("[data-sign]").forEach((b) => b.addEventListener("click", () => faSign(Number(b.dataset.sign))));
+  document.getElementById("faContinueBtn").addEventListener("click", finishFreeAgencyAndAdvance);
+}
+
+/* ---------------- render: trade (direct + finder) ---------------- */
+let tradeState = { subtab: "direct", counterparty: null, mySend: new Set(), myPicksSend: new Set(), theirSend: new Set(), theirPicksSend: new Set() };
+function pickKey(dp) { return `${dp.year}-${dp.round}-${dp.originalTeam}`; }
+function pickLabel(dp) { return `${dp.year} Rd ${dp.round}${dp.originalTeam !== dp.ownerTeam ? " (via " + dp.originalTeam + ")" : ""}`; }
+
+function renderTrade() {
+  const panel = document.getElementById("tradePanel");
+  if (!S.myTeam) {
+    panel.innerHTML = `<div class="panel-head"><div class="panel-title">Trade Center</div></div><div class="empty-state">Take control of a team (see the top bar) to negotiate trades yourself. CPU teams still make deals with each other — check the Log for activity.</div>`;
+    return;
+  }
+  panel.innerHTML = `
+    <div class="panel-head"><div class="panel-title">Trade Center</div></div>
+    <div class="subtabs">
+      <button data-subtab="direct" aria-selected="${tradeState.subtab === "direct"}">Direct Trade</button>
+      <button data-subtab="finder" aria-selected="${tradeState.subtab === "finder"}">Trade Finder</button>
+    </div>
+    <div id="tradeSubContent"></div>`;
+  panel.querySelectorAll("[data-subtab]").forEach((b) => b.addEventListener("click", () => { tradeState.subtab = b.dataset.subtab; renderTrade(); }));
+  if (tradeState.subtab === "direct") renderDirectTrade(); else renderTradeFinder();
+}
+
+function renderDirectTrade() {
+  const myTeam = S.league.teams[S.myTeam];
+  const others = Object.values(S.league.teams).filter((t) => t.abbr !== S.myTeam).sort((a, b) => E.teamName(a).localeCompare(E.teamName(b)));
+  if (!tradeState.counterparty) tradeState.counterparty = others[0].abbr;
+  const counterparty = S.league.teams[tradeState.counterparty];
+  const content = document.getElementById("tradeSubContent");
+  content.innerHTML = `
+    <div class="panel-sub" style="margin-bottom:12px;">${esc(E.teamName(myTeam))} &#8644; <span id="counterpartyName">${esc(E.teamName(counterparty))}</span>
+      <select class="chip-select" id="counterpartySelect" style="margin-left:10px;">${others.map((t) => `<option value="${t.abbr}" ${t.abbr === tradeState.counterparty ? "selected" : ""}>${esc(E.teamName(t))}</option>`).join("")}</select>
+    </div>
+    <div class="grid-2">
+      <div><div class="label" style="margin-bottom:8px;">${esc(myTeam.abbr)} Sends</div><div class="asset-list" id="myAssets"></div></div>
+      <div><div class="label" style="margin-bottom:8px;">${esc(counterparty.abbr)} Sends</div><div class="asset-list" id="theirAssets"></div></div>
+    </div>
+    <div class="panel" style="margin-top:16px;padding:14px 16px;border-top-color:var(--gold);">
+      <div class="value-readout">
+        <span>Value out: <strong id="valOut">0</strong></span>
+        <span>Value in: <strong id="valIn">0</strong></span>
+        <span class="verdict" id="verdict"></span>
+      </div>
+      <div class="meter" style="margin-top:8px;"><span id="valMeter" style="width:0%;"></span></div>
+      <div style="margin-top:12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+        <button class="btn btn--primary" id="proposeBtn">Propose Trade</button>
+        <span class="muted" id="tradeResultMsg"></span>
+      </div>
+    </div>
+    <div class="panel-head" style="margin-top:18px;"><div class="panel-title" style="font-size:13px;">Recent Trades</div></div>
+    <div id="tradeLog" class="log-list" style="max-height:200px;"></div>`;
+
+  document.getElementById("counterpartySelect").onchange = (e) => {
+    tradeState.counterparty = e.target.value;
+    tradeState.theirSend = new Set(); tradeState.theirPicksSend = new Set();
+    renderDirectTrade();
+  };
+  document.getElementById("myAssets").innerHTML = renderAssetRows(myTeam, tradeState.mySend, tradeState.myPicksSend, "mine");
+  document.getElementById("theirAssets").innerHTML = renderAssetRows(counterparty, tradeState.theirSend, tradeState.theirPicksSend, "theirs");
+  content.querySelectorAll("input[data-toggle]").forEach((cb) => cb.addEventListener("change", () => {
+    const [side, kind, key] = cb.dataset.toggle.split("::");
+    const set = side === "mine" ? (kind === "player" ? tradeState.mySend : tradeState.myPicksSend) : (kind === "player" ? tradeState.theirSend : tradeState.theirPicksSend);
+    if (cb.checked) set.add(key); else set.delete(key);
+    updateTradeMeter();
+  }));
+  updateTradeMeter();
+  renderTradeLog();
+}
+
+function renderAssetRows(team, playerSet, pickSet, side) {
+  const playerRows = team.roster.slice().sort((a, b) => b.ovr - a.ovr).map((p) => `
+    <label class="asset-row ${playerSet.has(String(p.id)) ? "checked" : ""}">
+      <input type="checkbox" data-toggle="${side}::player::${p.id}" ${playerSet.has(String(p.id)) ? "checked" : ""}/>
+      <span class="pill pill--pos">${p.pos}</span>
+      <span class="asset-name">${esc(p.name)} <span class="muted">${p.ovr} OVR, ${p.age}y</span></span>
+      <span class="stars">${starRating(E.playerValue(p))}</span>
+      <span class="num muted">${fmtSalary(p.salary)}</span>
+    </label>`).join("");
+  const pickRows = team.picks.slice().sort((a, b) => a.year - b.year || a.round - b.round).map((dp) => `
+    <label class="asset-row ${pickSet.has(pickKey(dp)) ? "checked" : ""}">
+      <input type="checkbox" data-toggle="${side}::pick::${pickKey(dp)}" ${pickSet.has(pickKey(dp)) ? "checked" : ""}/>
+      <span class="asset-name">${pickLabel(dp)}</span>
+      <span class="stars">${starRating(E.pickValue(dp, S.league) * 2.2)}</span>
+    </label>`).join("");
+  return playerRows + pickRows;
+}
+
+function collectSelected(team, playerSet, pickSet) {
+  return { players: team.roster.filter((p) => playerSet.has(String(p.id))), picks: team.picks.filter((dp) => pickSet.has(pickKey(dp))) };
+}
+
+function updateTradeMeter() {
+  const myTeam = S.league.teams[S.myTeam];
+  const counterparty = S.league.teams[tradeState.counterparty];
+  const mySend = collectSelected(myTeam, tradeState.mySend, tradeState.myPicksSend);
+  const theirSend = collectSelected(counterparty, tradeState.theirSend, tradeState.theirPicksSend);
+  const valOut = E.assetsValue(mySend.players, mySend.picks, S.league);
+  const valIn = E.assetsValue(theirSend.players, theirSend.picks, S.league);
+  document.getElementById("valOut").textContent = valOut.toFixed(1);
+  document.getElementById("valIn").textContent = valIn.toFixed(1);
+  const total = Math.max(1, valOut + valIn);
+  document.getElementById("valMeter").style.width = `${Math.min(100, (valIn / total) * 100)}%`;
+  const fair = valIn >= valOut * 0.88;
+  const verdict = document.getElementById("verdict");
+  if (!mySend.players.length && !mySend.picks.length && !theirSend.players.length && !theirSend.picks.length) {
+    verdict.textContent = ""; verdict.className = "verdict";
+  } else {
+    verdict.textContent = fair ? "Looks fair" : "Lopsided your way — expect a rejection";
+    verdict.className = "verdict " + (fair ? "ok" : "bad");
+  }
+  document.getElementById("proposeBtn").onclick = () => proposeTrade();
+}
+
+function proposeTrade() {
+  const myTeam = S.league.teams[S.myTeam];
+  const counterparty = S.league.teams[tradeState.counterparty];
+  const mySend = collectSelected(myTeam, tradeState.mySend, tradeState.myPicksSend);
+  const theirSend = collectSelected(counterparty, tradeState.theirSend, tradeState.theirPicksSend);
+  const msgEl = document.getElementById("tradeResultMsg");
+  if (!mySend.players.length && !mySend.picks.length && !theirSend.players.length && !theirSend.picks.length) {
+    msgEl.textContent = "Select at least one asset on each side."; return;
+  }
+  const evalResult = E.evaluateTrade(S.league, counterparty, theirSend, mySend);
+  if (evalResult.accept) {
+    E.executeTrade(S.league, myTeam.abbr, mySend.players, mySend.picks, counterparty.abbr, theirSend.players, theirSend.picks);
+    log(`You trade ${mySend.players.map((p) => p.name).join(", ") || "picks"} to ${teamLabel(counterparty.abbr)} for ${theirSend.players.map((p) => p.name).join(", ") || "picks"}.`, "TRADE");
+    msgEl.textContent = `Accepted: ${evalResult.reason}.`;
+    tradeState.mySend = new Set(); tradeState.myPicksSend = new Set();
+    tradeState.theirSend = new Set(); tradeState.theirPicksSend = new Set();
+    save();
+    renderDirectTrade();
+    renderRoster();
+  } else {
+    msgEl.textContent = `${teamLabel(counterparty.abbr)} reject: ${evalResult.reason}.`;
+  }
+}
+
+function renderTradeLog() {
+  const entries = S.log.filter((e) => e.tag === "TRADE").slice(-15).reverse();
+  document.getElementById("tradeLog").innerHTML = entries.length
+    ? entries.map((e) => `<div class="log-row"><span class="log-tag">Y${S.league.year}</span><span>${esc(e.text)}</span></div>`).join("")
+    : `<div class="empty-state">No trades yet this era.</div>`;
+}
+
+function renderTradeFinder() {
+  const content = document.getElementById("tradeSubContent");
+  if (!S.tradeFinderOffers) S.tradeFinderOffers = E.generateTradeOffers(S.league, S.myTeam, 8);
+  const offers = S.tradeFinderOffers;
+  content.innerHTML = `
+    <div class="panel-sub" style="margin-bottom:14px;">${offers.length} offer${offers.length === 1 ? "" : "s"} from other front offices &middot; <button class="btn btn--sm" id="refreshOffersBtn">Refresh Offers</button></div>
+    <div id="offerList"></div>`;
+  document.getElementById("refreshOffersBtn").addEventListener("click", () => { S.tradeFinderOffers = E.generateTradeOffers(S.league, S.myTeam, 8); renderTradeFinder(); });
+  const list = document.getElementById("offerList");
+  if (!offers.length) { list.innerHTML = `<div class="empty-state">No offers on the table right now. Check back after simming a bit.</div>`; return; }
+  list.innerHTML = offers.map((o, i) => `
+    <div class="offer-card">
+      <div class="offer-head"><span class="oh-team">${esc(teamLabel(o.cpuTeam))} Offer</span><span class="stars">${starRating(o.stars * 12 + 40)}</span></div>
+      <div class="label" style="margin-bottom:4px;">You Receive</div>
+      <div class="offer-assets">${o.theyGivePlayers.map((p) => `<span class="offer-chip">${esc(p.name)} (${p.pos} · ${p.ovr})</span>`).join("")}${o.theyGivePicks.map((dp) => `<span class="offer-chip">${pickLabel(dp)}</span>`).join("")}</div>
+      <div class="label" style="margin-bottom:4px;">You Send</div>
+      <div class="offer-assets">${o.theyWantPlayers.map((p) => `<span class="offer-chip">${esc(p.name)} (${p.pos} · ${p.ovr})</span>`).join("")}</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;">
+        <span class="muted num" style="font-size:12px;">${fmtSalary(o.incomingSalary)} incoming</span>
+        <button class="btn btn--sm btn--primary" data-accept="${i}">Accept Trade</button>
+      </div>
+    </div>`).join("");
+  list.querySelectorAll("[data-accept]").forEach((btn) => btn.addEventListener("click", () => acceptTradeFinderOffer(Number(btn.dataset.accept))));
+}
+
+function acceptTradeFinderOffer(idx) {
+  const o = S.tradeFinderOffers[idx];
+  if (!o) return;
+  E.executeTrade(S.league, S.myTeam, o.theyWantPlayers, o.theyWantPicks, o.cpuTeam, o.theyGivePlayers, o.theyGivePicks);
+  log(`You accept ${teamLabel(o.cpuTeam)}'s offer: receive ${o.theyGivePlayers.map((p) => p.name).join(", ")} for ${o.theyWantPlayers.map((p) => p.name).join(", ")}.`, "TRADE");
+  S.tradeFinderOffers = E.generateTradeOffers(S.league, S.myTeam, 8);
+  save();
+  renderTrade();
+}
+
+/* ---------------- render: log ---------------- */
+function renderLog() {
+  document.getElementById("logList").innerHTML = S.log.slice(-300).map((e) => `<div class="log-row"><span class="log-tag">${esc(e.tag)}</span><span>${esc(e.text)}</span></div>`).join("");
+}
+
+/* ---------------- master render ---------------- */
+function renderAll() {
+  setHeaderChrome();
+  renderTopbarActions();
+  renderNav();
+  document.querySelectorAll(".view").forEach((v) => v.classList.remove("is-active"));
+  const view = document.getElementById(`view-${S.tab}`);
+  if (view) view.classList.add("is-active");
+  if (S.tab === "standings") renderStandings();
+  else if (S.tab === "roster") renderRoster();
+  else if (S.tab === "schedule") renderSchedule();
+  else if (S.tab === "playoffs") renderPlayoffs();
+  else if (S.tab === "awards") renderAwards();
+  else if (S.tab === "draft") renderDraft();
+  else if (S.tab === "freeagency") renderFreeAgency();
+  else if (S.tab === "trade") renderTrade();
+  else if (S.tab === "log") renderLog();
+}
+
+/* ---------------- boot ---------------- */
+function init() {
+  const saved = loadSaved();
+  if (saved && saved.league) {
+    const t = saved.myTeam && saved.league.teams[saved.myTeam];
+    document.getElementById("startResumeNote").textContent = `Saved franchise found: ${saved.league.year} season${t ? ", " + t.city + " " + t.nickname : ""}.`;
+    const resumeBtn = document.createElement("button");
+    resumeBtn.className = "btn btn--primary";
+    resumeBtn.textContent = "Resume Franchise";
+    resumeBtn.addEventListener("click", () => resumeFranchise(saved));
+    document.querySelector(".start-actions").prepend(resumeBtn);
+  }
+  renderTeamPicker();
+  document.getElementById("startBtn").addEventListener("click", () => {
+    if (!pendingTeam) { alert("Pick a team first, or choose Spectate for a full-auto league."); return; }
+    newFranchise(pendingTeam);
+  });
+  document.getElementById("spectateBtn").addEventListener("click", () => newFranchise(null));
+  document.getElementById("resetBtn").addEventListener("click", () => {
+    if (confirm("This wipes your saved franchise from this browser. Continue?")) {
+      localStorage.removeItem(SAVE_KEY);
+      location.reload();
+    }
+  });
+  document.getElementById("tradeAlertBackdrop").addEventListener("click", (e) => { if (e.target.id === "tradeAlertBackdrop") { /* modal is a required checkpoint; ignore backdrop clicks */ } });
+  document.getElementById("boxScoreBackdrop").addEventListener("click", (e) => { if (e.target.id === "boxScoreBackdrop") closeBoxScore(); });
+}
+
+document.addEventListener("DOMContentLoaded", init);
+})();
+</script>
+</body>
+</html>
