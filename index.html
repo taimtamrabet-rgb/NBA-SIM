@@ -527,11 +527,11 @@ function makePlayer(opts) {
   const experience = opts.rookie ? 0 : Math.max(0, age - 19);
   const salary = opts.rookie && opts.pick ? rookieScaleSalary(opts.pick) : veteranSalary(overall, age);
   const contractYears = opts.rookie ? 3 : rndInt(1, 4);
-  // Only an actual draftee should ever be Rookie-of-the-Year eligible.
-  // Veterans generated at league genesis already have "experience" years
-  // under their belt, so seed seasonsPlayed the same way or every player on
-  // the very first opening-day rosters would look like a rookie.
-  const seasonsPlayed = opts.rookie ? 0 : experience;
+  // Only an actual draftee should ever be Rookie-of-the-Year eligible. A
+  // non-rookie 19-year-old (e.g. a real second-year player still on a young
+  // deal) would otherwise get experience = max(0, 19-19) = 0 and look like a
+  // rookie by coincidence, so floor non-rookies at 1 regardless of age.
+  const seasonsPlayed = opts.rookie ? 0 : Math.max(1, experience);
   return {
     id: nextId(), name: opts.name || randomName(), pos: position, age, ovr: overall,
     off: offense, def: defense, pot: potential, salary, exp: experience,
