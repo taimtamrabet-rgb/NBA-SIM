@@ -1,0 +1,676 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>PayFlow — Fake Bank Demo</title>
+<meta name="description" content="A fake, colorful PayPal-style bank demo with a balance, a virtual card, and a Pay button that plays the Apple Pay chime. For fun/demo purposes only — not a real bank." />
+<link rel="icon" href="data:," />
+</head>
+<body>
+<style>
+  :root {
+    --pp-blue: #003087;
+    --pp-blue-2: #0070ba;
+    --pp-cyan: #00c2ff;
+    --pp-yellow: #ffc439;
+    --pp-gold: #ffde00;
+    --pp-green: #14c785;
+    --ink: #0b1f3a;
+    --muted: #5b6b85;
+    --card-radius: 22px;
+    --shadow: 0 20px 50px -20px rgba(0, 48, 135, 0.45);
+    --font-body: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-mono: ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+  }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    min-height: 100%;
+    font-family: var(--font-body);
+    color: var(--ink);
+    background:
+      radial-gradient(1100px 700px at 15% -10%, #eaf6ff 0%, transparent 60%),
+      radial-gradient(900px 600px at 110% 10%, #fff3cf 0%, transparent 55%),
+      linear-gradient(180deg, #f4f8ff 0%, #eef3fb 100%);
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 40px 16px 80px;
+  }
+
+  .app {
+    width: 100%;
+    max-width: 420px;
+  }
+
+  /* ---------- Top bar ---------- */
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 18px;
+    padding: 0 4px;
+  }
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 800;
+    font-size: 20px;
+    letter-spacing: -0.02em;
+  }
+  .brand .dot-p1 { color: var(--pp-blue-2); }
+  .brand .dot-p2 { color: var(--pp-cyan); }
+  .avatar {
+    width: 38px; height: 38px; border-radius: 50%;
+    background: linear-gradient(135deg, var(--pp-blue-2), var(--pp-cyan));
+    display: flex; align-items: center; justify-content: center;
+    color: white; font-weight: 700; font-size: 15px;
+    box-shadow: var(--shadow);
+  }
+
+  /* ---------- Balance card ---------- */
+  .balance-card {
+    position: relative;
+    border-radius: 26px;
+    padding: 26px 24px 24px;
+    background: linear-gradient(135deg, var(--pp-blue) 0%, var(--pp-blue-2) 55%, var(--pp-cyan) 130%);
+    color: white;
+    box-shadow: var(--shadow);
+    overflow: hidden;
+    margin-bottom: 18px;
+  }
+  .balance-card::before {
+    content: "";
+    position: absolute;
+    inset: -60% -20% auto auto;
+    width: 260px; height: 260px;
+    background: radial-gradient(circle, rgba(255,222,0,0.35), transparent 70%);
+    border-radius: 50%;
+  }
+  .balance-card::after {
+    content: "";
+    position: absolute;
+    left: -80px; bottom: -100px;
+    width: 220px; height: 220px;
+    background: radial-gradient(circle, rgba(0,194,255,0.35), transparent 70%);
+    border-radius: 50%;
+  }
+  .balance-label {
+    font-size: 13px;
+    font-weight: 600;
+    opacity: 0.85;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    position: relative;
+  }
+  .balance-amount {
+    font-size: 42px;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    margin-top: 6px;
+    position: relative;
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+  }
+  .balance-amount .cents { font-size: 22px; opacity: 0.85; }
+  .balance-sub {
+    margin-top: 10px;
+    font-size: 13px;
+    opacity: 0.9;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    position: relative;
+  }
+  .balance-sub .pip {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--pp-green);
+    box-shadow: 0 0 0 3px rgba(20,199,133,0.35);
+  }
+
+  .quick-actions {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+    margin-bottom: 20px;
+  }
+  .qa-btn {
+    background: white;
+    border: 1px solid rgba(0,48,135,0.08);
+    border-radius: 16px;
+    padding: 12px 6px 10px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    font-size: 11.5px;
+    font-weight: 600;
+    color: var(--ink);
+    box-shadow: 0 8px 20px -14px rgba(0,48,135,0.35);
+    cursor: pointer;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+  }
+  .qa-btn:hover { transform: translateY(-2px); box-shadow: 0 12px 22px -12px rgba(0,48,135,0.4); }
+  .qa-icon {
+    width: 34px; height: 34px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px;
+  }
+  .qa-icon.send { background: #e8f0ff; color: var(--pp-blue-2); }
+  .qa-icon.request { background: #fff6d9; color: #b3860a; }
+  .qa-icon.topup { background: #e3fbf2; color: var(--pp-green); }
+  .qa-icon.more { background: #f1eaff; color: #7c4dff; }
+
+  /* ---------- Virtual card ---------- */
+  .section-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin: 4px 4px 10px;
+  }
+
+  .card-wrap {
+    perspective: 1200px;
+    margin-bottom: 22px;
+  }
+  .virtual-card {
+    position: relative;
+    border-radius: var(--card-radius);
+    padding: 22px 22px 20px;
+    height: 190px;
+    color: white;
+    background:
+      radial-gradient(120% 140% at 100% 0%, rgba(255,222,0,0.55) 0%, transparent 45%),
+      linear-gradient(135deg, #0b1f3a 0%, #003087 45%, #0070ba 100%);
+    box-shadow: var(--shadow);
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    overflow: hidden;
+    transition: transform 0.4s ease;
+  }
+  .virtual-card::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background:
+      repeating-linear-gradient(115deg, rgba(255,255,255,0.05) 0 2px, transparent 2px 10px);
+    opacity: 0.5;
+  }
+  .card-row-top {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    position: relative;
+  }
+  .card-chip {
+    width: 42px; height: 32px;
+    border-radius: 7px;
+    background: linear-gradient(135deg, #ffe07a, #ffc439);
+    box-shadow: inset 0 0 0 1px rgba(0,0,0,0.15);
+    position: relative;
+  }
+  .card-chip::before, .card-chip::after {
+    content: "";
+    position: absolute;
+    left: 6px; right: 6px;
+    height: 1px;
+    background: rgba(0,0,0,0.25);
+  }
+  .card-chip::before { top: 11px; }
+  .card-chip::after { top: 20px; }
+  .card-logo {
+    font-weight: 800;
+    font-size: 17px;
+    letter-spacing: -0.02em;
+  }
+  .card-logo .p2 { color: var(--pp-cyan); }
+  .card-number {
+    font-family: var(--font-mono);
+    font-size: 19px;
+    letter-spacing: 0.14em;
+    position: relative;
+    margin-top: 10px;
+  }
+  .card-row-bottom {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    position: relative;
+  }
+  .card-holder-label, .card-exp-label {
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    opacity: 0.7;
+    margin-bottom: 3px;
+  }
+  .card-holder { font-size: 13.5px; font-weight: 600; letter-spacing: 0.03em; }
+  .card-exp { font-size: 13.5px; font-weight: 600; font-family: var(--font-mono); }
+  .card-network {
+    font-weight: 800;
+    font-size: 15px;
+    letter-spacing: -0.01em;
+    background: rgba(255,255,255,0.14);
+    padding: 4px 10px;
+    border-radius: 999px;
+  }
+
+  /* ---------- Pay panel ---------- */
+  .pay-panel {
+    background: white;
+    border-radius: 22px;
+    padding: 20px 20px 22px;
+    box-shadow: 0 8px 24px -16px rgba(0,48,135,0.35);
+    margin-bottom: 18px;
+  }
+  .pay-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 14px;
+  }
+  .pay-row .to {
+    font-size: 14px;
+    color: var(--muted);
+  }
+  .pay-row .to b { color: var(--ink); }
+  .pay-amount-input {
+    width: 100%;
+    border: none;
+    outline: none;
+    font-size: 34px;
+    font-weight: 800;
+    color: var(--ink);
+    background: transparent;
+    margin-bottom: 16px;
+    font-family: var(--font-body);
+  }
+  .pay-amount-input::placeholder { color: #c7d0e0; }
+
+  .pay-btn {
+    width: 100%;
+    border: none;
+    cursor: pointer;
+    border-radius: 999px;
+    padding: 15px 18px;
+    font-size: 16px;
+    font-weight: 700;
+    color: #fff;
+    background: linear-gradient(135deg, #000 0%, #1c1c1e 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    box-shadow: 0 10px 24px -10px rgba(0,0,0,0.5);
+    transition: transform 0.12s ease, box-shadow 0.12s ease;
+    position: relative;
+    overflow: hidden;
+  }
+  .pay-btn:active { transform: scale(0.97); }
+  .pay-btn.success {
+    background: linear-gradient(135deg, #0a8f5b, var(--pp-green));
+  }
+  .pay-btn svg { width: 20px; height: 20px; }
+  .pay-btn .apple-mark { font-size: 19px; margin-right: -2px; }
+
+  .pay-hint {
+    text-align: center;
+    font-size: 12px;
+    color: var(--muted);
+    margin-top: 10px;
+  }
+
+  /* ---------- Sound test row ---------- */
+  .sound-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: white;
+    border-radius: 18px;
+    padding: 14px 16px;
+    box-shadow: 0 8px 24px -16px rgba(0,48,135,0.35);
+    margin-bottom: 22px;
+  }
+  .sound-btn {
+    flex-shrink: 0;
+    width: 46px; height: 46px;
+    border-radius: 50%;
+    border: none;
+    cursor: pointer;
+    background: linear-gradient(135deg, var(--pp-yellow), var(--pp-gold));
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 8px 18px -8px rgba(255,196,57,0.7);
+    transition: transform 0.12s ease;
+  }
+  .sound-btn:active { transform: scale(0.92); }
+  .sound-btn svg { width: 20px; height: 20px; color: #7a4b00; }
+  .sound-copy { flex: 1; }
+  .sound-copy .t1 { font-weight: 700; font-size: 14px; }
+  .sound-copy .t2 { font-size: 12.5px; color: var(--muted); margin-top: 2px; }
+
+  /* ---------- Transactions ---------- */
+  .tx-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 10px; }
+  .tx-item {
+    background: white;
+    border-radius: 16px;
+    padding: 12px 14px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    box-shadow: 0 6px 18px -14px rgba(0,48,135,0.3);
+  }
+  .tx-icon {
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 15px;
+    flex-shrink: 0;
+  }
+  .tx-icon.out { background: #ffe9e9; color: #e14b4b; }
+  .tx-icon.in { background: #e3fbf2; color: var(--pp-green); }
+  .tx-main { flex: 1; min-width: 0; }
+  .tx-name { font-size: 13.5px; font-weight: 600; }
+  .tx-date { font-size: 11.5px; color: var(--muted); margin-top: 1px; }
+  .tx-amt { font-size: 14px; font-weight: 700; white-space: nowrap; }
+  .tx-amt.out { color: #e14b4b; }
+  .tx-amt.in { color: var(--pp-green); }
+
+  .disclaimer {
+    text-align: center;
+    font-size: 11px;
+    color: var(--muted);
+    opacity: 0.75;
+    margin-top: 26px;
+    line-height: 1.5;
+    padding: 0 10px;
+  }
+
+  /* ---------- Payment sheet overlay ---------- */
+  .overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(9, 18, 38, 0.55);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s ease;
+    z-index: 50;
+    padding: 0;
+  }
+  .overlay.show { opacity: 1; pointer-events: auto; }
+  .sheet {
+    width: 100%;
+    max-width: 420px;
+    background: #fff;
+    border-radius: 26px 26px 0 0;
+    padding: 28px 26px 34px;
+    transform: translateY(100%);
+    transition: transform 0.35s cubic-bezier(.2,.9,.25,1);
+    box-shadow: 0 -20px 50px rgba(0,0,0,0.25);
+  }
+  .overlay.show .sheet { transform: translateY(0); }
+  .sheet-head { text-align: center; margin-bottom: 18px; }
+  .sheet-icon {
+    width: 64px; height: 64px;
+    margin: 0 auto 14px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    background: #f1f4fa;
+    font-size: 30px;
+    transition: background 0.3s ease, transform 0.3s ease;
+  }
+  .sheet-icon.pulse { animation: pulse 0.9s ease infinite; }
+  @keyframes pulse {
+    0% { box-shadow: 0 0 0 0 rgba(0,112,186,0.35); }
+    70% { box-shadow: 0 0 0 16px rgba(0,112,186,0); }
+    100% { box-shadow: 0 0 0 0 rgba(0,112,186,0); }
+  }
+  .sheet-icon.done { background: #e3fbf2; }
+  .sheet-title { font-size: 17px; font-weight: 700; }
+  .sheet-sub { font-size: 13px; color: var(--muted); margin-top: 4px; }
+  .sheet-amount { text-align: center; font-size: 30px; font-weight: 800; margin: 10px 0 6px; }
+  .sheet-close {
+    margin-top: 18px;
+    width: 100%;
+    border: none;
+    background: #f1f4fa;
+    color: var(--ink);
+    font-weight: 700;
+    font-size: 14px;
+    padding: 13px;
+    border-radius: 999px;
+    cursor: pointer;
+    display: none;
+  }
+  .sheet-close.show { display: block; }
+
+  @media (max-width: 380px) {
+    .balance-amount { font-size: 36px; }
+    .quick-actions { gap: 8px; }
+  }
+</style>
+
+<div class="app">
+
+  <div class="topbar">
+    <div class="brand"><span class="dot-p1">Pay</span><span class="dot-p2">Flow</span></div>
+    <div class="avatar">TT</div>
+  </div>
+
+  <div class="balance-card">
+    <div class="balance-label">Available balance</div>
+    <div class="balance-amount">$<span id="balanceWhole">2,481</span><span class="cents">.<span id="balanceCents">37</span></span></div>
+    <div class="balance-sub"><span class="pip"></span> Synced just now · USD</div>
+  </div>
+
+  <div class="quick-actions">
+    <div class="qa-btn"><span class="qa-icon send">↑</span>Send</div>
+    <div class="qa-btn"><span class="qa-icon request">↓</span>Request</div>
+    <div class="qa-btn"><span class="qa-icon topup">+</span>Top up</div>
+    <div class="qa-btn"><span class="qa-icon more">⋯</span>More</div>
+  </div>
+
+  <div class="section-title">Your card</div>
+  <div class="card-wrap">
+    <div class="virtual-card">
+      <div class="card-row-top">
+        <div class="card-chip"></div>
+        <div class="card-logo">Pay<span class="p2">Flow</span></div>
+      </div>
+      <div class="card-number">4482&nbsp;&nbsp;19••&nbsp;&nbsp;••••&nbsp;&nbsp;7730</div>
+      <div class="card-row-bottom">
+        <div>
+          <div class="card-holder-label">Card holder</div>
+          <div class="card-holder">TAIM T.</div>
+        </div>
+        <div>
+          <div class="card-exp-label">Expires</div>
+          <div class="card-exp">09/29</div>
+        </div>
+        <div class="card-network">VISA</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-title">Make a payment</div>
+  <div class="pay-panel">
+    <div class="pay-row"><span class="to">Paying <b>Corner Coffee Co.</b></span></div>
+    <input class="pay-amount-input" id="amountInput" type="text" inputmode="decimal" value="$8.50" />
+    <button class="pay-btn" id="payBtn">
+      <span class="apple-mark">🍎</span> Pay
+    </button>
+    <div class="pay-hint">Tap Pay to simulate a purchase — no real money moves.</div>
+  </div>
+
+  <div class="sound-row">
+    <button class="sound-btn" id="soundOnlyBtn" aria-label="Play Apple Pay sound">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+    </button>
+    <div class="sound-copy">
+      <div class="t1">Apple Pay chime</div>
+      <div class="t2">Just hear the sound, no payment sheet</div>
+    </div>
+  </div>
+
+  <div class="section-title">Recent activity</div>
+  <div class="tx-list">
+    <div class="tx-item">
+      <div class="tx-icon out">☕</div>
+      <div class="tx-main">
+        <div class="tx-name">Corner Coffee Co.</div>
+        <div class="tx-date">Yesterday · 8:41 AM</div>
+      </div>
+      <div class="tx-amt out">−$6.25</div>
+    </div>
+    <div class="tx-item">
+      <div class="tx-icon in">💵</div>
+      <div class="tx-main">
+        <div class="tx-name">Payroll deposit</div>
+        <div class="tx-date">Aug 1 · 9:00 AM</div>
+      </div>
+      <div class="tx-amt in">+$2,140.00</div>
+    </div>
+    <div class="tx-item">
+      <div class="tx-icon out">🛒</div>
+      <div class="tx-main">
+        <div class="tx-name">Fresh Market</div>
+        <div class="tx-date">Jul 29 · 6:12 PM</div>
+      </div>
+      <div class="tx-amt out">−$54.10</div>
+    </div>
+  </div>
+
+  <div class="disclaimer">
+    PayFlow is a fake demo interface for fun — it is not a real bank, no real payments are made, and no real card or account data is used.
+  </div>
+
+</div>
+
+<div class="overlay" id="overlay">
+  <div class="sheet">
+    <div class="sheet-head">
+      <div class="sheet-icon pulse" id="sheetIcon">🍎</div>
+      <div class="sheet-title" id="sheetTitle">Confirm with Apple Pay</div>
+      <div class="sheet-sub" id="sheetSub">Corner Coffee Co.</div>
+    </div>
+    <div class="sheet-amount" id="sheetAmount">$8.50</div>
+    <button class="sheet-close" id="sheetClose">Done</button>
+  </div>
+</div>
+
+<audio id="applePaySound" src="assets/applepay.mp3" preload="auto"></audio>
+
+<script>
+  const audio = document.getElementById('applePaySound');
+  const payBtn = document.getElementById('payBtn');
+  const soundOnlyBtn = document.getElementById('soundOnlyBtn');
+  const overlay = document.getElementById('overlay');
+  const sheetIcon = document.getElementById('sheetIcon');
+  const sheetTitle = document.getElementById('sheetTitle');
+  const sheetSub = document.getElementById('sheetSub');
+  const sheetAmount = document.getElementById('sheetAmount');
+  const sheetClose = document.getElementById('sheetClose');
+  const amountInput = document.getElementById('amountInput');
+  const balanceWhole = document.getElementById('balanceWhole');
+  const balanceCents = document.getElementById('balanceCents');
+
+  function playChime() {
+    audio.currentTime = 0;
+    audio.play().catch(() => {});
+  }
+
+  function parseAmount() {
+    const n = parseFloat(amountInput.value.replace(/[^0-9.]/g, ''));
+    return isNaN(n) ? 0 : n;
+  }
+
+  function formatAmount(n) {
+    return '$' + n.toFixed(2);
+  }
+
+  function deductBalance(amount) {
+    const whole = parseInt(balanceWhole.textContent.replace(/,/g, ''), 10);
+    const cents = parseInt(balanceCents.textContent, 10);
+    let total = whole * 100 + cents - Math.round(amount * 100);
+    if (total < 0) total = 0;
+    const newWhole = Math.floor(total / 100);
+    const newCents = total % 100;
+    balanceWhole.textContent = newWhole.toLocaleString('en-US');
+    balanceCents.textContent = String(newCents).padStart(2, '0');
+  }
+
+  let processing = false;
+
+  payBtn.addEventListener('click', () => {
+    if (processing) return;
+    processing = true;
+
+    const amount = parseAmount();
+    sheetTitle.textContent = 'Confirm with Apple Pay';
+    sheetSub.textContent = 'Corner Coffee Co.';
+    sheetAmount.textContent = formatAmount(amount);
+    sheetIcon.textContent = '🍎';
+    sheetIcon.classList.remove('done');
+    sheetIcon.classList.add('pulse');
+    sheetClose.classList.remove('show');
+    overlay.classList.add('show');
+
+    playChime();
+
+    setTimeout(() => {
+      sheetIcon.classList.remove('pulse');
+      sheetIcon.classList.add('done');
+      sheetIcon.textContent = '✓';
+      sheetTitle.textContent = 'Payment complete';
+      sheetSub.textContent = 'Sent to Corner Coffee Co.';
+      sheetClose.classList.add('show');
+      payBtn.classList.add('success');
+      payBtn.innerHTML = '✓ Paid';
+      deductBalance(amount);
+    }, 1300);
+  });
+
+  sheetClose.addEventListener('click', () => {
+    overlay.classList.remove('show');
+    setTimeout(() => {
+      payBtn.classList.remove('success');
+      payBtn.innerHTML = '<span class="apple-mark">🍎</span> Pay';
+      processing = false;
+    }, 250);
+  });
+
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay && sheetClose.classList.contains('show')) {
+      sheetClose.click();
+    }
+  });
+
+  soundOnlyBtn.addEventListener('click', playChime);
+
+  amountInput.addEventListener('focus', () => {
+    if (amountInput.value.startsWith('$')) {
+      amountInput.value = amountInput.value.slice(1);
+    }
+  });
+  amountInput.addEventListener('blur', () => {
+    const n = parseAmount();
+    amountInput.value = formatAmount(n);
+  });
+</script>
+
+</body>
+</html>
