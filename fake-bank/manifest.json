@@ -1,0 +1,14 @@
+{
+  "name": "PayFlow",
+  "short_name": "PayFlow",
+  "description": "A colorful PayPal-style fake bank demo with a Pay button that plays the Apple Pay chime.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#eef3fb",
+  "theme_color": "#0070ba",
+  "icons": [
+    { "src": "assets/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "assets/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+  ]
+}
