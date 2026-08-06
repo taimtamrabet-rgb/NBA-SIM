@@ -47,6 +47,24 @@
     width: 100%;
     max-width: 420px;
   }
+  .app > * {
+    opacity: 0;
+    animation: fadeSlideUp 0.6s cubic-bezier(.16,.84,.44,1) forwards;
+  }
+  .app > *:nth-child(1) { animation-delay: 0.02s; }
+  .app > *:nth-child(2) { animation-delay: 0.08s; }
+  .app > *:nth-child(3) { animation-delay: 0.15s; }
+  .app > *:nth-child(4) { animation-delay: 0.21s; }
+  .app > *:nth-child(5) { animation-delay: 0.27s; }
+  .app > *:nth-child(6) { animation-delay: 0.33s; }
+  .app > *:nth-child(7) { animation-delay: 0.39s; }
+  .app > *:nth-child(8) { animation-delay: 0.44s; }
+  .app > *:nth-child(9) { animation-delay: 0.49s; }
+  .app > *:nth-child(10) { animation-delay: 0.54s; }
+  @keyframes fadeSlideUp {
+    from { opacity: 0; transform: translateY(14px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
 
   /* ---------- Top bar ---------- */
   .topbar {
@@ -207,6 +225,24 @@
       repeating-linear-gradient(115deg, rgba(255,255,255,0.05) 0 2px, transparent 2px 10px);
     opacity: 0.5;
   }
+  .virtual-card::after {
+    content: "";
+    position: absolute;
+    top: -50%; bottom: -50%;
+    left: -60%;
+    width: 45%;
+    background: linear-gradient(75deg, transparent 0%, rgba(255,255,255,0.16) 45%, rgba(255,255,255,0.28) 50%, rgba(255,255,255,0.16) 55%, transparent 100%);
+    transform: rotate(0deg);
+    animation: cardShimmer 5.5s ease-in-out infinite;
+    animation-delay: 1.2s;
+  }
+  @keyframes cardShimmer {
+    0% { left: -60%; }
+    22% { left: 130%; }
+    100% { left: 130%; }
+  }
+  .card-wrap { transition: transform 0.25s ease; }
+  .card-wrap:hover { transform: translateY(-3px) rotateX(3deg); }
   .card-row-top {
     display: flex;
     align-items: flex-start;
@@ -320,9 +356,30 @@
   .pay-btn:active { transform: scale(0.97); }
   .pay-btn.success {
     background: linear-gradient(135deg, #0a8f5b, var(--pp-green));
+    animation: btnPop 0.4s cubic-bezier(.34,1.56,.64,1);
+  }
+  @keyframes btnPop {
+    0% { transform: scale(1); }
+    45% { transform: scale(1.045); }
+    100% { transform: scale(1); }
   }
   .pay-btn svg { width: 20px; height: 20px; }
-  .pay-btn .apple-mark { font-size: 19px; margin-right: -2px; }
+  .pay-btn .apple-mark { font-size: 19px; margin-right: -2px; display: inline-block; transition: transform 0.15s ease; }
+  .pay-btn:active .apple-mark { transform: scale(0.85); }
+
+  .ripple {
+    position: absolute;
+    border-radius: 50%;
+    transform: scale(0);
+    opacity: 0.55;
+    background: rgba(255,255,255,0.55);
+    animation: rippleAnim 0.6s ease-out forwards;
+    pointer-events: none;
+  }
+  @keyframes rippleAnim {
+    to { transform: scale(2.6); opacity: 0; }
+  }
+  .qa-btn, .sound-btn { position: relative; overflow: hidden; }
 
   .pay-hint {
     text-align: center;
@@ -425,22 +482,98 @@
   .overlay.show .sheet { transform: translateY(0); }
   .sheet-head { text-align: center; margin-bottom: 18px; }
   .sheet-icon {
+    position: relative;
     width: 64px; height: 64px;
     margin: 0 auto 14px;
     border-radius: 50%;
     display: flex; align-items: center; justify-content: center;
     background: #f1f4fa;
     font-size: 30px;
-    transition: background 0.3s ease, transform 0.3s ease;
+    transition: background 0.35s ease;
   }
-  .sheet-icon.pulse { animation: pulse 0.9s ease infinite; }
-  @keyframes pulse {
-    0% { box-shadow: 0 0 0 0 rgba(0,112,186,0.35); }
-    70% { box-shadow: 0 0 0 16px rgba(0,112,186,0); }
-    100% { box-shadow: 0 0 0 0 rgba(0,112,186,0); }
+  .sheet-icon-spinner {
+    position: absolute;
+    inset: -5px;
+    border-radius: 50%;
+    background: conic-gradient(from 0deg, transparent 0deg, var(--pp-blue-2) 300deg, var(--pp-cyan) 360deg);
+    -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 3px));
+            mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 3px));
+    opacity: 0;
   }
-  .sheet-icon.done { background: #e3fbf2; }
-  .sheet-title { font-size: 17px; font-weight: 700; }
+  .sheet-icon.processing .sheet-icon-spinner { opacity: 1; animation: spin 0.85s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .sheet-icon-emoji {
+    position: relative;
+    z-index: 1;
+    transition: opacity 0.25s ease, transform 0.25s ease;
+  }
+  .sheet-icon.processing .sheet-icon-emoji { animation: emojiBreathe 0.85s ease infinite; }
+  @keyframes emojiBreathe {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(0.9); }
+  }
+  .sheet-icon.success .sheet-icon-emoji { opacity: 0; transform: scale(0.4); }
+
+  .sheet-check {
+    position: absolute;
+    inset: 0;
+    width: 100%; height: 100%;
+    opacity: 0;
+    transform: scale(0.6);
+    transition: opacity 0.2s ease, transform 0.2s ease;
+  }
+  .sheet-icon.success .sheet-check { opacity: 1; transform: scale(1); }
+  .check-circle {
+    fill: none;
+    stroke: var(--pp-green);
+    stroke-width: 2.5;
+    stroke-dasharray: 146;
+    stroke-dashoffset: 146;
+  }
+  .sheet-icon.success .check-circle { animation: drawCircle 0.5s ease forwards; }
+  @keyframes drawCircle { to { stroke-dashoffset: 0; } }
+  .check-mark {
+    fill: none;
+    stroke: var(--pp-green);
+    stroke-width: 4;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-dasharray: 36;
+    stroke-dashoffset: 36;
+  }
+  .sheet-icon.success .check-mark { animation: drawCheck 0.35s ease forwards 0.32s; }
+  @keyframes drawCheck { to { stroke-dashoffset: 0; } }
+
+  .sheet-icon.success { background: #e3fbf2; }
+  .sheet-icon.success::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    border: 2px solid var(--pp-green);
+    animation: ringBurst 0.65s ease-out forwards 0.05s;
+  }
+  @keyframes ringBurst {
+    0% { transform: scale(1); opacity: 0.55; }
+    100% { transform: scale(1.7); opacity: 0; }
+  }
+
+  .confetti-dot {
+    position: fixed;
+    top: 0; left: 0;
+    width: 6px; height: 6px;
+    border-radius: 2px;
+    pointer-events: none;
+    z-index: 60;
+    animation: confettiBurst 0.75s cubic-bezier(.2,.7,.3,1) forwards;
+  }
+  @keyframes confettiBurst {
+    0% { transform: translate(0, 0) rotate(0deg) scale(1); opacity: 1; }
+    100% { transform: translate(var(--dx), var(--dy)) rotate(var(--rot)) scale(0.4); opacity: 0; }
+  }
+
+  .sheet-title { font-size: 17px; font-weight: 700; transition: opacity 0.15s ease; }
   .sheet-sub { font-size: 13px; color: var(--muted); margin-top: 4px; }
   .sheet-amount { text-align: center; font-size: 30px; font-weight: 800; margin: 10px 0 6px; }
   .sheet-close {
@@ -563,7 +696,14 @@
 <div class="overlay" id="overlay">
   <div class="sheet">
     <div class="sheet-head">
-      <div class="sheet-icon pulse" id="sheetIcon">🍎</div>
+      <div class="sheet-icon" id="sheetIcon">
+        <span class="sheet-icon-spinner"></span>
+        <span class="sheet-icon-emoji" id="sheetEmoji">🍎</span>
+        <svg class="sheet-check" viewBox="0 0 52 52" aria-hidden="true">
+          <circle class="check-circle" cx="26" cy="26" r="23"></circle>
+          <path class="check-mark" d="M14.5 27.5l7 7 16-16.5"></path>
+        </svg>
+      </div>
       <div class="sheet-title" id="sheetTitle">Confirm with Apple Pay</div>
       <div class="sheet-sub" id="sheetSub">Corner Coffee Co.</div>
     </div>
@@ -587,6 +727,7 @@
   const amountInput = document.getElementById('amountInput');
   const balanceWhole = document.getElementById('balanceWhole');
   const balanceCents = document.getElementById('balanceCents');
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   function playChime() {
     audio.currentTime = 0;
@@ -602,20 +743,80 @@
     return '$' + n.toFixed(2);
   }
 
-  function deductBalance(amount) {
+  function currentBalanceCents() {
     const whole = parseInt(balanceWhole.textContent.replace(/,/g, ''), 10);
     const cents = parseInt(balanceCents.textContent, 10);
-    let total = whole * 100 + cents - Math.round(amount * 100);
-    if (total < 0) total = 0;
-    const newWhole = Math.floor(total / 100);
-    const newCents = total % 100;
-    balanceWhole.textContent = newWhole.toLocaleString('en-US');
-    balanceCents.textContent = String(newCents).padStart(2, '0');
+    return whole * 100 + cents;
+  }
+
+  function renderBalance(totalCents) {
+    const w = Math.floor(totalCents / 100);
+    const c = totalCents % 100;
+    balanceWhole.textContent = w.toLocaleString('en-US');
+    balanceCents.textContent = String(c).padStart(2, '0');
+  }
+
+  function tweenBalanceTo(targetCents, duration) {
+    const startCents = currentBalanceCents();
+    const delta = targetCents - startCents;
+    if (reduceMotion || delta === 0) { renderBalance(targetCents); return; }
+    const start = performance.now();
+    function step(now) {
+      const t = Math.min(1, (now - start) / duration);
+      const eased = 1 - Math.pow(1 - t, 3);
+      renderBalance(Math.round(startCents + delta * eased));
+      if (t < 1) requestAnimationFrame(step);
+    }
+    requestAnimationFrame(step);
+  }
+
+  function deductBalance(amount) {
+    const target = Math.max(0, currentBalanceCents() - Math.round(amount * 100));
+    tweenBalanceTo(target, 700);
+  }
+
+  function spawnRipple(el, x, y, color) {
+    const rect = el.getBoundingClientRect();
+    const size = Math.max(rect.width, rect.height) * 1.4;
+    const span = document.createElement('span');
+    span.className = 'ripple';
+    span.style.width = span.style.height = size + 'px';
+    span.style.left = (x - rect.left - size / 2) + 'px';
+    span.style.top = (y - rect.top - size / 2) + 'px';
+    span.style.background = color || 'rgba(255,255,255,0.55)';
+    el.appendChild(span);
+    span.addEventListener('animationend', () => span.remove());
+  }
+
+  function attachRipple(el, color) {
+    el.addEventListener('pointerdown', (e) => spawnRipple(el, e.clientX, e.clientY, color));
+  }
+
+  function burstConfetti(originEl) {
+    if (reduceMotion) return;
+    const rect = originEl.getBoundingClientRect();
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+    const colors = ['#0070ba', '#00c2ff', '#ffc439', '#14c785', '#003087'];
+    for (let i = 0; i < 10; i++) {
+      const dot = document.createElement('div');
+      dot.className = 'confetti-dot';
+      const angle = (Math.PI * 2 * i) / 10 + Math.random() * 0.5;
+      const dist = 46 + Math.random() * 34;
+      dot.style.setProperty('--dx', Math.cos(angle) * dist + 'px');
+      dot.style.setProperty('--dy', Math.sin(angle) * dist + 'px');
+      dot.style.setProperty('--rot', (Math.random() * 360 - 180) + 'deg');
+      dot.style.left = cx + 'px';
+      dot.style.top = cy + 'px';
+      dot.style.background = colors[i % colors.length];
+      document.body.appendChild(dot);
+      dot.addEventListener('animationend', () => dot.remove());
+    }
   }
 
   let processing = false;
 
-  payBtn.addEventListener('click', () => {
+  payBtn.addEventListener('click', (e) => {
     if (processing) return;
     processing = true;
 
@@ -623,30 +824,34 @@
     sheetTitle.textContent = 'Confirm with Apple Pay';
     sheetSub.textContent = 'Corner Coffee Co.';
     sheetAmount.textContent = formatAmount(amount);
-    sheetIcon.textContent = '🍎';
-    sheetIcon.classList.remove('done');
-    sheetIcon.classList.add('pulse');
+    sheetIcon.classList.remove('success');
+    sheetIcon.classList.add('processing');
     sheetClose.classList.remove('show');
     overlay.classList.add('show');
 
     playChime();
 
     setTimeout(() => {
-      sheetIcon.classList.remove('pulse');
-      sheetIcon.classList.add('done');
-      sheetIcon.textContent = '✓';
+      sheetIcon.classList.remove('processing');
+      sheetIcon.classList.add('success');
       sheetTitle.textContent = 'Payment complete';
       sheetSub.textContent = 'Sent to Corner Coffee Co.';
       sheetClose.classList.add('show');
       payBtn.classList.add('success');
       payBtn.innerHTML = '✓ Paid';
       deductBalance(amount);
+      burstConfetti(sheetIcon);
     }, 1300);
   });
+
+  attachRipple(payBtn, 'rgba(255,255,255,0.45)');
+  attachRipple(soundOnlyBtn, 'rgba(122,75,0,0.25)');
+  document.querySelectorAll('.qa-btn').forEach((btn) => attachRipple(btn, 'rgba(0,48,135,0.16)'));
 
   sheetClose.addEventListener('click', () => {
     overlay.classList.remove('show');
     setTimeout(() => {
+      sheetIcon.classList.remove('success');
       payBtn.classList.remove('success');
       payBtn.innerHTML = '<span class="apple-mark">🍎</span> Pay';
       processing = false;
